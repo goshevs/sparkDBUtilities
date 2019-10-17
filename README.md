@@ -44,6 +44,11 @@ partitioning by
 [RANGE COLUMNS](https://mariadb.com/kb/en/library/range-columns-and-list-columns-partitioning-types/).
 
 
+`pushSchemaToMDB` accepts user-supplied partitioning strings and
+therefore users are not confined to the three types of
+partitioning logic offered here.
+
+
 ## Detailed description
 
 A detailed description of all utilities will be provied in due course.
