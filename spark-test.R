@@ -61,9 +61,9 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
-                partitionString = partitionByListColumn(partColumn, myPartitions)
+                partColumn = partColumn,
+                partitionString = partitionByListColumn(partColumn, myPartitions),
                 groupSuffix = myDbName)
-
 
 print("Push the data to the distributed db")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",

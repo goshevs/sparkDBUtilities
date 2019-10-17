@@ -221,13 +221,8 @@ pushAdminToMDBString <- function(dbNodes, dbPort, dbUser ,dbPass,
 
 ## ===>>> TABLE CALLS             
 
-pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn, partValueList,
-                                  partitionString, frontEnd = TRUE) {
-
-    ## Check partition string
-    if (length(partitionString == 0)) {
-        stop("Partition string is a required argument.")
-    }
+pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
+                                  partitionString = NULL, frontEnd = TRUE) {
 
     ## Common component
     commonPart <- paste("DROP TABLE IF EXISTS", dbTableName, ";",
@@ -241,39 +236,54 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn, partValu
     ## Default engine
     dbEngine <- "InnoDB"
 
+    ## Default key and engine
+    dbKeyEngineDefault <- paste0(", PRIMARY KEY(id))", "ENGINE =", dbEngine, ";")
 
-    ## Add "id" to partColumn (if not in it) for form primaryKeys
-    myTest <- intersect("id", partColumn)
-    if (length(myTest) == 0) {
-        primaryKeys <- c("id", partColumn)
-    }
+    
+    if (!missing(partitionString) & !missing(partColumn)) { # dist MDB
+        
+        ## Add "id" to partColumn (if not in it) for form primaryKeys
+        myTest <- intersect("id", partColumn)
+        if (length(myTest) == 0) {
+            primaryKeys <- c("id", partColumn)
+        }
 
-    ## Accommodate multiple primary keys
-    primaryKeys <- ifelse(length(primaryKeys) > 1,
-                         paste(primaryKeys, collapse = ","),
-                         primaryKeys)
-    
-    
-    ## Write out the schema
-    if (frontEnd) {
-        dbEngine <- "SPIDER"
-        myCall <- paste0(commonPart,
-                         paste0("PRIMARY KEY(", primaryKeys, ")"),
-                         ") ENGINE =", dbEngine,
-                         " COMMENT='wrapper \\\"mysql\\\", table \\\"", dbTableName, "\\\"' ",
-                         partitionString)
+        ## Accommodate multiple primary keys
+        primaryKeys <- ifelse(length(primaryKeys) > 1,
+                              paste(primaryKeys, collapse = ","),
+                              primaryKeys)
+        
+        
+        ## Write out the schema
+        if (frontEnd) {
+            dbEngine <- "SPIDER"
+            myCall <- paste0(commonPart,
+                             paste0("PRIMARY KEY(", primaryKeys, ")"),
+                             ") ENGINE =", dbEngine,
+                             " COMMENT='wrapper \\\"mysql\\\", table \\\"", dbTableName, "\\\"' ",
+                             partitionString)
+        } else {
+
+            myCall <- paste(commonPart, dbKeyEngineDefault)
+
+        }
+    } else if (missing(partitionString) & missing(partColumn)) { # non-dist MDB
+
+        myCall <- paste(commonPart, dbKeyEngineDefault)
+        
     } else {
-        myCall <- paste(commonPart, 
-                        ", PRIMARY KEY(id))", "ENGINE =", dbEngine,  ";")
-    }
 
+        stop("Arguments partColumn and partitionString incorrectly specified", call.=FALSE)
+
+    }
+    
     return(myCall)
 }
 
 
 ## ===>>> SYSTEM CALL
 
-pushToMDB <- function(callVector, groupSuffix) {
+pushToMDB <- function(callVector) {
     
     mySytemCalls <- paste0("mysql --defaults-group-suffix=", groupSuffix,
                            " -h ", dbNodes, " -D ", dbName,
@@ -323,27 +333,34 @@ pushAdminToMDB <- function(dbNodes, dbPort, dbUser ,dbPass,
 
 ####### ===>> TABLE SCHEMA CALL
 
-pushSchemaToMDB <- function(dbNodes, dbName,
-                            dbTableName, tableSchema,
-                            partitionString, groupSuffix) {
+pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
+                            partColumn = NULL, partitionString = NULL,) {
 
-    ## Number of frontend and backend nodes
-    nodeNumVector <- c(1, length(dbNodes)-1)
+    if (length(dbNodes) > 1 ) { # dist DB
+        ## Number of frontend and backend nodes
+        nodeNumVector <- c(1, length(dbNodes) - 1)
 
-    ## Write out frontend and backend calls
-    mySchemaCalls <- unlist(
-        lapply(c(TRUE, FALSE), 
-               function(i) {
-                   pushSchemaToMDBString(
-                       dbTableName = dbTableName,
-                       tableSchema = tableSchema,
-                       partitionString = partitionString,
-                       frontEnd = i)
-               }))
-    
-    ## Add backend calls
-    mySchemaCalls <- rep(mySchemaCalls, nodeNumVector)
+        ## Write out frontend and backend calls
+        mySchemaCall <- unlist(
+            lapply(c(TRUE, FALSE), 
+                   function(i) {
+                       pushSchemaToMDBString(
+                           dbTableName = dbTableName,
+                           tableSchema = tableSchema,
+                           partColumn = partColumn,
+                           partitionString = partitionString,
+                           frontEnd = i)
+                   }))
+        
+        ## Add backend calls
+        mySchemaCall <- rep(mySchemaCall, nodeNumVector)
+
+    } else { #non-dist DB
+        
+        mySchemaCall <- pushSchemaToMDBString(dbTableName = dbTableName,
+                                              tableSchema = tableSchema)
+    }
     
     ## Submit the call
-    pushToMDB(mySchemaCalls, groupSuffix)
+    pushToMDB(mySchemaCall)
 }
