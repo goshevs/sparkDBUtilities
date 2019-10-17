@@ -31,17 +31,17 @@ The repo also offers several utility functions:
 
 - `partitionByListColumn`: a string writer corresponding to
 partitioning by
-(LIST COLUMNS)[https://mariadb.com/kb/en/library/range-columns-and-list-columns-partitioning-types/].
+[LIST COLUMNS](https://mariadb.com/kb/en/library/range-columns-and-list-columns-partitioning-types/).
 At this time, `partitioning_expression` can only be a variable name, i.e.
 expressions are not supported.
 
 -`partitionByHash`: a string writer corresponding to partitioning by
-(HASH)[https://mariadb.com/kb/en/library/spider-use-cases/], see *Use
+[HASH](https://mariadb.com/kb/en/library/spider-use-cases/), see *Use
 case 2*.
 
 -`partitionByRangeColumn`: a string writer corresponding to
 partitioning by
-(RANGE COLUMNS)[https://mariadb.com/kb/en/library/range-columns-and-list-columns-partitioning-types/].
+[RANGE COLUMNS](https://mariadb.com/kb/en/library/range-columns-and-list-columns-partitioning-types/).
 
 
 ## Detailed description
