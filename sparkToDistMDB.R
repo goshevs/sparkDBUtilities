@@ -31,6 +31,8 @@
 ##       case TimestampType => Option(JdbcType("TIMESTAMP", java.sql.Types.TIMESTAMP))
 ##       case DateType => Option(JdbcType("DATE", java.sql.Types.DATE))
 
+################################################################################
+### TYPE CONVERSION KEY
 
 my.spark.jdbc.conversion.key <- as.data.frame(
     list(colType = c("IntegerType", "LongType", "DoubleType", "FloatType", "ShortType",
@@ -41,6 +43,9 @@ my.spark.jdbc.conversion.key <- as.data.frame(
 )
 ## Note: currently ignoring DecimalType ==> DECIMAL(precision, scale) ##
 
+
+################################################################################
+### RETRIEVING TABLE SCHEMA
 
 getSchema <- function(x, key = my.spark.jdbc.conversion.key) {
     
@@ -73,6 +78,9 @@ getSchema <- function(x, key = my.spark.jdbc.conversion.key) {
     return(mySchemaFinal)
 }
 
+
+################################################################################
+### SHARDING RULES
 
 
 ## FRONTEND: Write out partition rules string
@@ -183,9 +191,11 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
 
 
 ################################################################################
-### Write out MDB calls
+### COMPOSING MDB CALLS
 
-## ===>>> One-time call
+
+## ===>>> ONE-TIME SETUP CALL
+
 pushAdminToMDBString <- function(dbNodes, dbPort, dbUser ,dbPass,
                                  dbName, dbTableName, frontEnd = TRUE) {
     if (frontEnd) {
@@ -209,7 +219,8 @@ pushAdminToMDBString <- function(dbNodes, dbPort, dbUser ,dbPass,
 
 
 
-## ===>>> Repeat call for every table created            
+## ===>>> TABLE CALLS             
+
 pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn, partValueList,
                                   partitionString, frontEnd = TRUE) {
 
@@ -260,7 +271,7 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn, partValu
 }
 
 
-## ===>>> System call
+## ===>>> SYSTEM CALL
 
 pushToMDB <- function(callVector, groupSuffix) {
     
@@ -277,9 +288,11 @@ pushToMDB <- function(callVector, groupSuffix) {
 
 
 ################################################################################
-### Submitting the MDB calls
+### EXECUTING THE MDB CALLS
 
-####### ===>> ADMIN CALL
+
+####### ===>> SETUP CALL
+
 pushAdminToMDB <- function(dbNodes, dbPort, dbUser ,dbPass,
                            dbName, dbTableName, groupSuffix) {
 
@@ -334,7 +347,3 @@ pushSchemaToMDB <- function(dbNodes, dbName,
     ## Submit the call
     pushToMDB(mySchemaCalls, groupSuffix)
 }
-
-
-## mysql --defaults-group-suffix=testData -h compute002 -D testData -e "DROP TABLE IF EXISTS myTable ; CREATE TABLE myTable (id INT NOT NULL AUTO_INCREMENT,  year INTEGER DEFAULT NULL, ORGID INTEGER DEFAULT NULL, CHIAPAYERCLAIMCONTROLNUMBER INTEGER DEFAULT NULL, PROCEDURECODECLEANED TEXT DEFAULT NULL , PRIMARY KEY(id, ORGID)) ENGINE = SPIDER COMMENT='wrapper \"mysql\", table \"myTable\"' PARTITION BY list columns (ORGID) ( PARTITION pt1 values in (1,2) COMMENT ='srv \"backend1\"', PARTITION pt2 values in (3,4,5) COMMENT = 'srv \"backend2\"');"
-

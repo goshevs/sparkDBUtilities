@@ -5,7 +5,7 @@
 ##
 ##
 ## Simo Goshev
-## Oct 11, 2019
+## Oct 17, 2019
 
 
 rm(list=ls())
@@ -16,8 +16,14 @@ library(stringr)
 
 
 ## Load scripts
-source("~/scripts/r-utilities/sparkArgsParser.R") # returns object userConfig 
+source("~/scripts/r-utilities/sparkArgsParser.R") 
 source("~/scripts/r-utilities/sparkToDistMDB.R")
+
+## Collect the arguments passed to the script
+myArgs = commandArgs(trailingOnly=TRUE)
+
+## Parse the arguments
+userConfig <- parseArguments(myArgs)
 
 ## Initialize a spark session
 sparkR.session()
@@ -60,7 +66,7 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
 
 
 print("Push the data to the distributed db")
-write.jdbc(myData, jdbcUrl, myTableName, mode = "append",
+write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
 
 
