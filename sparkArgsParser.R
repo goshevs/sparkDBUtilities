@@ -50,7 +50,7 @@ parseArguments <- function(myArgs) {
 
         ## Define db node, port and name
         myDbNodePort <- str_split(readLines(myArgs$myDbNodePortFile), ":", simplify=TRUE)
-        jdbcUrl <- paste0("jdbc:mysql://", myDbNodePort[1], ":", myDbNodePort[2], "/", myDbName)
+        jdbcUrl <- paste0("jdbc:mysql://", myDbNodePort[1], ":", myDbNodePort[2], "/", userConfig$myDbName)
 
         ## Retrieve user name and password for DB
         myUserCred <- readLines(myArgs$myUserCredFile)
@@ -70,6 +70,8 @@ parseArguments <- function(myArgs) {
             userConfig <- c(userConfig, list(dbNodes = readLines(myArgs$myDbNodesFile),
                                              dbBEUser = myBEUserCred[1],
                                              dbBEPass = myBEUserCred[2]))
+            
+                   userConfig <- c(userConfig, list(dbBENodes = userConfig$dbNodes[-1]))
         }
     }
     return(userConfig)

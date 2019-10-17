@@ -53,7 +53,7 @@ pushAdminToMDB(dbNodes = userConfig$dbNodes,
                dbPass = userConfig$dbBEPass,
                dbName = userConfig$dbName,
                dbTableName = myTableName,
-               groupSuffix = myDbName)
+               groupSuffix = userConfig$dbName)
 
 ## Table-specific call that sets up the distributed table
 print("Push the schema to the distributed db")
@@ -63,7 +63,7 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 tableSchema = getSchema(myData),
                 partColumn = partColumn,
                 partitionString = partitionByListColumn(partColumn, myPartitions),
-                groupSuffix = myDbName)
+                groupSuffix = userConfig$dbName)
 
 print("Push the data to the distributed db")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",

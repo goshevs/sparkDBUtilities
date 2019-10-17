@@ -8,7 +8,7 @@
 ##
 ##
 ## Simo Goshev
-## Oct 16, 2019
+## Oct 17, 2019
 
 
 
@@ -126,11 +126,12 @@ partitionByListColumn <- function(partColumn, partValueList) {
 ## --------------------------
 ## Input:
 ## partColumn: a string with a column name
+## beNodes: a vector of backend nodes
 
-partitionByHash <- function(partColumn) {
+partitionByHash <- function(partColumn, beNodes) {
     header <- paste0("PARTITION BY HASH (", partColumn, ")")
     body <- unlist(lapply(
-        seq_along(partValueList),
+        seq_along(beNodes),
         function(i) {                                   
             paste0("PARTITION pt", i, " COMMENT = 'srv \\\"backend", i, "\\\"'")
         }))
@@ -155,13 +156,13 @@ partitionByHash <- function(partColumn) {
 partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, sortVal = TRUE) {
 
     ## Accommodate multiple columns
-    partColumn <- ifelse(length(partColumn) > 1,
-                         paste(partColumn, collapse = ","),
-                         partColumn)
+    partColumnCollapsed <- ifelse(length(partColumn) > 1,
+                                 paste(partColumn, collapse = ","),
+                                 partColumn)
 
     ## Sort partValues
-    if (sortVal) {
-        if (is.list(partValueList)) {
+    if (sortVal & length(partColumn) < 2) { # only sort if partColumn < 2! 
+        if (is.list(partValueList)) { 
             partValueList <-  lapply(partValueList, sort)
         } else {
             partValueList <- sort(partValueList)
@@ -171,13 +172,14 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
     ## Add maxvalue to partValuesList
     if (maxValAdd) {
         if (is.list(partValueList)) {
-            partValueList <- lapply(partValueList, c, "maxvalue")
+            ## partValueList <- lapply(partValueList, c, "maxvalue")
+             partValueList <- c(partValueList,list(rep("maxvalue", length(partColumn))))
         } else {
             partValueList <- c(partValueList, "maxvalue")
         }
     }
     
-    header <- paste0("PARTITION BY RANGE COLUMNS (", partColumn, ")")
+    header <- paste0("PARTITION BY RANGE COLUMNS (", partColumnCollapsed, ")")
     body <- unlist(lapply(
         seq_along(partValueList),
         function(i) {                                   
@@ -196,16 +198,16 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
 
 ## ===>>> ONE-TIME SETUP CALL
 
-pushAdminToMDBString <- function(dbNodes, dbPort, dbUser ,dbPass,
+pushAdminToMDBString <- function(dbBENodes, dbPort, dbUser ,dbPass,
                                  dbName, dbTableName, frontEnd = TRUE) {
     if (frontEnd) {
-        ## Remove frontend node from the list of nodes
+
         commandString <- unlist(lapply(
-            seq_along(dbNodes[-1]),
+            seq_along(dbBENodes),
             function(i) {
                 paste0("DROP SERVER IF EXISTS backend", i, "; ",
                        "CREATE SERVER backend" , i, " FOREIGN DATA WRAPPER mysql ",
-                       "OPTIONS(HOST '", dbNodes[i], "', DATABASE '", dbName,
+                       "OPTIONS(HOST '", dbBENodes[i], "', DATABASE '", dbName,
                        "', USER '", dbUser, "', PASSWORD '", dbPass, "', PORT ", dbPort, ");"
                        )}))
         myCall <- paste(commandString, collapse = "")
@@ -237,7 +239,7 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
     dbEngine <- "InnoDB"
 
     ## Default key and engine
-    dbKeyEngineDefault <- paste0(", PRIMARY KEY(id))", "ENGINE =", dbEngine, ";")
+    dbKeyEngineDefault <- paste0(", PRIMARY KEY(id))", " ENGINE = ", dbEngine, ";")
 
     
     if (!missing(partitionString) & !missing(partColumn)) { # dist MDB
@@ -258,8 +260,8 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
         if (frontEnd) {
             dbEngine <- "SPIDER"
             myCall <- paste0(commonPart,
-                             paste0("PRIMARY KEY(", primaryKeys, ")"),
-                             ") ENGINE =", dbEngine,
+                             paste0(", PRIMARY KEY(", primaryKeys, ")"),
+                             ") ENGINE = ", dbEngine,
                              " COMMENT='wrapper \\\"mysql\\\", table \\\"", dbTableName, "\\\"' ",
                              partitionString)
         } else {
@@ -283,7 +285,7 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
 
 ## ===>>> SYSTEM CALL
 
-pushToMDB <- function(callVector) {
+pushToMDB <- function(callVector, dbNodes, dbName, groupSuffix) {
     
     mySytemCalls <- paste0("mysql --defaults-group-suffix=", groupSuffix,
                            " -h ", dbNodes, " -D ", dbName,
@@ -303,18 +305,18 @@ pushToMDB <- function(callVector) {
 
 ####### ===>> SETUP CALL
 
-pushAdminToMDB <- function(dbNodes, dbPort, dbUser ,dbPass,
+pushAdminToMDB <- function(dbNodes, dbBENodes, dbPort, dbUser ,dbPass,
                            dbName, dbTableName, groupSuffix) {
 
     ## Number of frontend and backend nodes
-    nodeNumVector <- c(1, length(dbNodes)-1)
+    nodeNumVector <- c(1, length(dbBENodes))
 
     ## Write out frontend and backend calls
     myAdminCalls <- unlist(
         lapply(c(TRUE, FALSE), 
                function(i) {
                    pushAdminToMDBString(
-                       dbNodes = dbNodes,
+                       dbBENodes = dbBENodes,
                        dbPort = dbPort,
                        dbUser = dbUser,
                        dbPass = dbPass,
@@ -327,14 +329,14 @@ pushAdminToMDB <- function(dbNodes, dbPort, dbUser ,dbPass,
     myAdminCalls <- rep(myAdminCalls, nodeNumVector)
     
     ## Submit the call
-    pushToMDB(myAdminCalls, groupSuffix)
+    pushToMDB(myAdminCalls, dbNodes, dbName, groupSuffix)
 }
 
 
 ####### ===>> TABLE SCHEMA CALL
 
 pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
-                            partColumn = NULL, partitionString = NULL,) {
+                            partColumn = NULL, partitionString = NULL) {
 
     if (length(dbNodes) > 1 ) { # dist DB
         ## Number of frontend and backend nodes
@@ -362,5 +364,5 @@ pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuff
     }
     
     ## Submit the call
-    pushToMDB(mySchemaCall)
+    pushToMDB(mySchemaCall, dbNodes, dbName, groupSuffix)
 }
