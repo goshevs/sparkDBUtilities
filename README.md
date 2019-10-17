@@ -1,4 +1,4 @@
-# R Utilities for Pushing Spark RDD's to MariaDB Distributed Tables
+# R utilities for pushing Spark RDD's to MariaDB distributed tables
 
 ## Introduction
 
