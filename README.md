@@ -27,7 +27,7 @@ The repo contains the following primary R functions:
   
 The repo also offers several utility functions:
  
-- `parseArguments`: a parser of the arguments passed to Spark
+- `parseArguments`: a parser of the arguments passed to a SparkR script
 
 - `partitionByListColumn`: a string writer corresponding to
 partitioning by
