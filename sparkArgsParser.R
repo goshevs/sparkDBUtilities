@@ -33,7 +33,7 @@ parseArguments <- function(myArgs) {
 
     ## Extracting info from arguments
     if (myArgs$myDataSetFile != "") {
-        
+        print(myArgs$myDataSetFile)
         userConfig <- c(userConfig, list(dataSet = myArgs$myDataSetFile))
 
     } else {
