@@ -5,7 +5,7 @@
 ##
 ##
 ## Simo Goshev
-## Oct 18, 2019
+## Oct 21, 2019
 
 
 rm(list=ls())
@@ -36,20 +36,17 @@ sparkR.session()
 ## Load dataset
 print("PRINTX: Loading data")
 
-print(userConfig$dataSet)
-
 myData <- read.df(userConfig$dataSet,
                   header = T,
                   na.strings = "",
                   source = "csv",
                   sep = "*",
                   inferSchema = TRUE)
-    
-## Define parameters for a MDB table push
-myTableName <- "myTableListColumns"
-partColumn <- "ORGID"
-myPartitions <- list(c('1', '2'),
-                     c('3', '4', '5'))
+
+
+
+################################################################################
+### SET UP CONNECTIONS AND CREDENTIALS
 
 ## One time call per session (if writing to the same DB) to set up connectivity
 print("PRINTX: Set up connectivity and credentials ")
@@ -60,6 +57,15 @@ pushAdminToMDB(dbNodes = userConfig$dbNodes,
                dbPass = userConfig$dbBEPass,
                dbName = userConfig$dbName,
                groupSuffix = userConfig$dbName)
+
+
+################################################################################
+### PARTITION BY LIST COLUMNS
+
+myTableName <- "myTableListColumns"
+partColumn <- "ORGID"
+myPartitions <- list(c('1', '2'),
+                     c('3', '4', '5'))
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
@@ -76,8 +82,8 @@ write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
 
 
-##########################
-
+################################################################################
+### PARTITION BY RANGE COLUMNS
 
 myTableName <- "myTableRangeColumns"
 partColumn <- c("year", "ORGID")
@@ -97,7 +103,10 @@ print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
 
-############################
+
+################################################################################
+### PARTITION BY HASH
+
 
 myTableName <- "myTableHash"
 partColumn <- "ORGID"
@@ -117,8 +126,8 @@ write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
 
 
-##############################
-
+################################################################################
+### NO PARTITIONING
 
 myTableName <- "myTableNonDist"
 
@@ -133,4 +142,3 @@ pushSchemaToMDB(dbNodes = userConfig$dbNode,
 print("PRINTX: Push the data to the distributed db (NON-DISTRIBUTED)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
-
