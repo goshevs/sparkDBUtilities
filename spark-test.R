@@ -46,7 +46,7 @@ myPartitions <- list(c('1', '2'),
 
 
 ## One time call per session which sets up connectivity
-print("Set up connectivity and credentials ")
+print("PRINTX: Set up connectivity and credentials ")
 pushAdminToMDB(dbNodes = userConfig$dbNodes,
                dbPort = userConfig$dbPort,
                dbUser = userConfig$dbBEUser,
@@ -56,7 +56,7 @@ pushAdminToMDB(dbNodes = userConfig$dbNodes,
                groupSuffix = userConfig$dbName)
 
 ## Table-specific call that sets up the distributed table
-print("Push the schema to the distributed db")
+print("PRINTX: Push the schema to the distributed db")
 pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
@@ -65,7 +65,7 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 partitionString = partitionByListColumn(partColumn, myPartitions),
                 groupSuffix = userConfig$dbName)
 
-print("Push the data to the distributed db")
+print("PRINTX: Push the data to the distributed db")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
 
