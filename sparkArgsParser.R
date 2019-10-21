@@ -33,7 +33,7 @@ parseArguments <- function(myArgs) {
 
     ## Extracting info from arguments
     if (myArgs$myDataSetFile != "") {
-        print(myArgs$myDataSetFile)
+        
         userConfig <- c(userConfig, list(dataSet = myArgs$myDataSetFile))
 
     } else {
@@ -50,7 +50,7 @@ parseArguments <- function(myArgs) {
 
         ## Define db node, port and name
         myDbNodePort <- str_split(readLines(myArgs$myDbNodePortFile), ":", simplify=TRUE)
-        jdbcUrl <- paste0("jdbc:mysql://", myDbNodePort[1], ":", myDbNodePort[2], "/", userConfig$myDbName)
+        jdbcUrl <- paste0("jdbc:mysql://", myDbNodePort[1], ":", myDbNodePort[2], "/", userConfig$dbName)
 
         ## Retrieve user name and password for DB
         myUserCred <- readLines(myArgs$myUserCredFile)
