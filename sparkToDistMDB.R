@@ -172,10 +172,9 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
     ## Add maxvalue to partValuesList
     if (maxValAdd) {
         if (is.list(partValueList)) {
-            ## partValueList <- lapply(partValueList, c, "maxvalue")
             partValueList <- c(partValueList, list(rep("maxvalue", length(partColumn))))
         } else {
-            partValueList <- c(partValueList, rep("maxvalue", length(partColumn)))
+            partValueList <- c(partValueList, "maxvalue")
         }
     }
     
@@ -199,7 +198,7 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
 ## ===>>> ONE-TIME SETUP CALL
 
 pushAdminToMDBString <- function(dbBENodes, dbPort, dbUser ,dbPass,
-                                 dbName, dbTableName, frontEnd = TRUE) {
+                                 dbName, frontEnd = TRUE) {
     if (frontEnd) {
 
         commandString <- unlist(lapply(
@@ -306,7 +305,7 @@ pushToMDB <- function(callVector, dbNodes, dbName, groupSuffix) {
 ####### ===>> SETUP CALL
 
 pushAdminToMDB <- function(dbNodes, dbBENodes, dbPort, dbUser ,dbPass,
-                           dbName, dbTableName, groupSuffix) {
+                           dbName, groupSuffix) {
 
     ## Number of frontend and backend nodes
     nodeNumVector <- c(1, length(dbBENodes))
@@ -321,7 +320,6 @@ pushAdminToMDB <- function(dbNodes, dbBENodes, dbPort, dbUser ,dbPass,
                        dbUser = dbUser,
                        dbPass = dbPass,
                        dbName = dbName,
-                       dbTableName = dbTableName,
                        frontEnd = i)
                }))
     
