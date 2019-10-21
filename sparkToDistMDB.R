@@ -173,9 +173,9 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
     if (maxValAdd) {
         if (is.list(partValueList)) {
             ## partValueList <- lapply(partValueList, c, "maxvalue")
-             partValueList <- c(partValueList,list(rep("maxvalue", length(partColumn))))
+            partValueList <- c(partValueList, list(rep("maxvalue", length(partColumn))))
         } else {
-            partValueList <- c(partValueList, "maxvalue")
+            partValueList <- c(partValueList, rep("maxvalue", length(partColumn)))
         }
     }
     
