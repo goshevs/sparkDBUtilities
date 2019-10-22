@@ -51,7 +51,7 @@ partitioning logic offered here.
 
 ## Detailed description
 
-A detailed description of all utilities will be provied in due course.
+A detailed description of all utilities will be provided in due course.
 
 ## Examples
 

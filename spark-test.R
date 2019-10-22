@@ -32,7 +32,6 @@ userConfig <- parseArguments(myArgs)
 ## Initialize a spark session
 sparkR.session()
 
-
 ## Load dataset
 print("PRINTX: Loading data")
 
@@ -139,6 +138,6 @@ pushSchemaToMDB(dbNodes = userConfig$dbNode,
                 tableSchema = getSchema(myData),
                 groupSuffix = userConfig$dbName)
 
-print("PRINTX: Push the data to the distributed db (NON-DISTRIBUTED)")
+print("PRINTX: Push the data to frontend db (NON-DISTRIBUTED)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
