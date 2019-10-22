@@ -101,7 +101,13 @@ getSchema <- function(x, key = my.spark.jdbc.conversion.key) {
 ## partColumn: a string with a column name
 ## partValueList: a list with values to split partColumn by
 
-partitionByListColumn <- function(partColumn, partValueList) {
+partitionByListColumn <- function(partColumn, partValueList, beNodes) {
+
+    ## Check for matching element numbers of partValueList and beNodes
+    if (length(beNodes) != length(partValueList)) {
+        stop("The number of partitions must equal the number of backend servers.")
+    }
+    
     header <- paste0("PARTITION BY LIST COLUMNS (", partColumn, ")")
     body <- unlist(lapply(
         seq_along(partValueList),
@@ -153,7 +159,7 @@ partitionByHash <- function(partColumn, beNodes) {
 ## partValuesList: a list of values corresponding to every column in partColumns
 ### Corner case: one column --> partValuesList: a vector of values of partColumns
 
-partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, sortVal = TRUE) {
+partitionByRangeColumn <- function(partColumn, partValueList, beNodes, maxValAdd = TRUE, sortVal = TRUE) {
 
     ## Accommodate multiple columns
     partColumnCollapsed <- ifelse(length(partColumn) > 1,
@@ -177,7 +183,12 @@ partitionByRangeColumn <- function(partColumn, partValueList, maxValAdd = TRUE, 
             partValueList <- c(partValueList, "maxvalue")
         }
     }
-    
+
+    ## Check for matching element numbers of partValueList and beNodes
+    if (length(beNodes) != length(partValueList)) {
+        stop("The number of partitions must equal the number of backend servers.")
+    }
+      
     header <- paste0("PARTITION BY RANGE COLUMNS (", partColumnCollapsed, ")")
     body <- unlist(lapply(
         seq_along(partValueList),

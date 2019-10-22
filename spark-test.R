@@ -73,7 +73,9 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
                 partColumn = partColumn,
-                partitionString = partitionByListColumn(partColumn, myPartitions),
+                partitionString = partitionByListColumn(partColumn,
+                                                        myPartitions,
+                                                        userConfig$dbBENodes),
                 groupSuffix = userConfig$dbName)
 
 print("PRINTX: Push the data to the distributed db (LIST COLUMNS)")
@@ -95,7 +97,9 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
                 partColumn = partColumn,
-                partitionString = partitionByRangeColumn(partColumn, myPartitions),
+                partitionString = partitionByRangeColumn(partColumn,
+                                                         myPartitions,
+                                                         userConfig$dbBENodes),
                 groupSuffix = userConfig$dbName)
 
 print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")
@@ -117,7 +121,8 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
                 partColumn = partColumn,
-                partitionString = partitionByHash(partColumn,userConfig$dbBENodes),
+                partitionString = partitionByHash(partColumn,
+                                                  userConfig$dbBENodes),
                 groupSuffix = userConfig$dbName)
 
 print("PRINTX: Push the data to the distributed db (HASH)")
