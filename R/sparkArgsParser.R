@@ -76,7 +76,3 @@ parseArguments <- function(myArgs) {
     }
     return(userConfig)
 }
-
-## Report the variables that are available to the user
-# print("User config values available in addition to jdbcUrl:")
-# print(names(userConfig))

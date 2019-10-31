@@ -32,22 +32,25 @@
 ##       case DateType => Option(JdbcType("DATE", java.sql.Types.DATE))
 
 ################################################################################
-### TYPE CONVERSION KEY
+### CREATE CONVERSION KEY
 
-my.spark.jdbc.conversion.key <- as.data.frame(
-    list(colType = c("IntegerType", "LongType", "DoubleType", "FloatType", "ShortType",
-                     "ByteType", "BooleanType", "StringType",  "BinaryType",  "TimestampType",
-                     "DateType"), 
-         mysqlType = c("INTEGER", "BIGINT", "DOUBLE PRECISION", "REAL", "INTEGER", "BYTE",
-                       "BIT(1)", "TEXT", "BLOB", "TIMESTAMP", "DATE"))
-)
+makeJdbcKey <- function() {
+    ## Update this function if definitions change
+    as.data.frame(
+        list(colType = c("IntegerType", "LongType", "DoubleType", "FloatType", "ShortType",
+                         "ByteType", "BooleanType", "StringType",  "BinaryType",  "TimestampType",
+                         "DateType"), 
+             mysqlType = c("INTEGER", "BIGINT", "DOUBLE PRECISION", "REAL", "INTEGER", "BYTE",
+                           "BIT(1)", "TEXT", "BLOB", "TIMESTAMP", "DATE"))
+    )
+}
 ## Note: currently ignoring DecimalType ==> DECIMAL(precision, scale) ##
 
 
 ################################################################################
 ### RETRIEVING TABLE SCHEMA
 
-getSchema <- function(x, key = my.spark.jdbc.conversion.key) {
+getSchema <- function(x, key = makeJdbcKey()) {
     
     mySchema <- schema(x)
     mySchemaFields <- lapply(sparkR.callJMethod(mySchema$jobj, "fields"), structField)
@@ -208,7 +211,7 @@ partitionByRangeColumn <- function(partColumn, partValueList, beNodes, maxValAdd
 
 ## ===>>> ONE-TIME SETUP CALL
 
-pushAdminToMDBString <- function(dbBENodes, dbPort, dbUser ,dbPass,
+pushAdminToMDBString <- function(dbBENodes, dbPort, dbUser, dbPass,
                                  dbName, frontEnd = TRUE) {
     if (frontEnd) {
 
@@ -297,12 +300,12 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
 
 pushToMDB <- function(callVector, dbNodes, dbName, groupSuffix) {
     
-    mySytemCalls <- paste0("mysql --defaults-group-suffix=", groupSuffix,
+    mySystemCalls <- paste0("mysql --defaults-group-suffix=", groupSuffix,
                            " -h ", dbNodes, " -D ", dbName,
                            " -e \"", callVector, "\"")
     
     ## Push to MDB    
-    lapply(mySytemCalls, system, intern = TRUE)
+    lapply(mySystemCalls, system, intern = TRUE)
 
     ## Print the call
     ## lapply(mySytemCalls, print)
