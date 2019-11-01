@@ -1,9 +1,9 @@
-# Utilities for pushing Spark RDD's to MariaDB distributed tables
+# Utilities for pushing Spark RDD's to MariaDB distributed databases
 
 ## Introduction
 
-The repo contains a set of R and Python utilities for pushing Spark
-RDD's to MariaDB distributed instances.
+The repo contains a set of Python and R utilities for pushing Spark
+RDD's to MariaDB distributed databases.
 
 
 ## Installation
