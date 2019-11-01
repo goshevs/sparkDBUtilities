@@ -181,21 +181,23 @@ def pushSchemaToMDBString(dbTableName, tableSchema, partColumn = None,
     ''' Write out the string of the command for pushing the schema of the table '''
 
     ## Check for BLOB/TEXT types in partColumn; use user input if provided
-    for key in partColumn:
-        if tableSchema[key][2] in ['BLOB', 'TEXT']:
-            if changeType is None:
-                raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
-            else:
-                try:
-                    myNewType = changeType[key]
-                except:
+    if partitionString is not None and partColumn is not None:  # dist MDB
+        for key in partColumn:
+            if tableSchema[key][2] in ['BLOB', 'TEXT']:
+                if changeType is None:
                     raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
                 else:
-                    if myNewType in ['BLOB', 'TEXT']:
+                    try:
+                        myNewType = changeType[key]
+                    except:
                         raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
                     else:
-                        tableSchema[key][2] = myNewType
-                  
+                        if myNewType in ['BLOB', 'TEXT']:
+                            raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
+                        else:
+                            tableSchema[key][2] = myNewType
+                         
+    
     ## Common component
     commonPart = ("DROP TABLE IF EXISTS " + dbTableName + "; " +
                   "CREATE TABLE " + dbTableName + " (" +
@@ -209,10 +211,9 @@ def pushSchemaToMDBString(dbTableName, tableSchema, partColumn = None,
     dbKeyEngineDefault = ", PRIMARY KEY(id)) ENGINE = " + dbEngine + ";"
 
     if partitionString is not None and partColumn is not None:  # dist MDB
-        
         ## Write out the schema
         if frontEnd:
-            partColumns = partColumn.copy()
+            partColumns = partColumn[:]
             ## Add "id" to partColumn (if not in it) for form primaryKeys
             try:
                 partColumns.index('id')

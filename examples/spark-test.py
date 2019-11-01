@@ -41,8 +41,8 @@ stdb.pushAdminToMDB(dbNodes = myArgs['dbNodes'],
                     dbUser = myArgs['dbUser'],
                     dbPass = myArgs['dbPass'],
                     dbName = myArgs['dbName'],
-                    groupSuffix = myArgs['dbName']
-                    )
+                    groupSuffix = myArgs['dbName'],
+                    debug = True)
  
 
 ################################################################################
@@ -67,7 +67,8 @@ stdb.pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
                      partitionString = stdb.partitionByListColumn(
                          myD,
                          myArgs['dbBENodes']),
-                     changeType = myNewType
+                     changeType = myNewType,
+                     debug = True
                      )
 
 print("PRINTX: Push the data to the distributed db (LIST COLUMNS)")

@@ -18,10 +18,15 @@ require(digest)
 
 
 ## Load scripts
-myURL <- c("https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkArgsParser.R",
-           "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkToDistMDB.R")
-eval(parse(text = getURL(myURL[1], ssl.verifypeer = FALSE)))
-eval(parse(text = getURL(myURL[2], ssl.verifypeer = FALSE)))
+##myPath = '/Users/goshev/Desktop/gitProjects/sparkDBUtilities/R/'
+myPath = '/data/goshev/projects/sparktest/scripts/'
+source(paste0(myPath, 'sparkArgsParser.R'))
+source(paste0(myPath, 'sparkToDistMDB.R'))
+       
+## myURL <- c("https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkArgsParser.R",
+##            "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkToDistMDB.R")
+## eval(parse(text = getURL(myURL[1], ssl.verifypeer = FALSE)))
+## eval(parse(text = getURL(myURL[2], ssl.verifypeer = FALSE)))
 
 
 ## Collect the arguments passed to the script
@@ -40,8 +45,7 @@ myData <- read.df(userConfig$dataSet,
                   header = T,
                   na.strings = "",
                   source = "csv",
-                  sep = "*",
-                  inferSchema = TRUE)
+                  sep = "*")
 
 
 
@@ -66,8 +70,7 @@ pushAdminToMDB(dbNodes = userConfig$dbNodes,
 myTableName <- 'myTableListColumns'
 myPartition <- list('ORGID' = list(c('1', '2'), c('3', '4', '5')))
 
-## Testing type change
-myData$ORGID <- cast(myData$ORGID, "string")
+## Type change from TEXT to VARCHAR(30)
 myNewType <- list('ORGID' = 'VARCHAR(30)')
 
 ## Table-specific call that sets up the distributed table
@@ -97,9 +100,6 @@ myTableName <- "myTableRangeColumns"
 myPartition <- list('year' = c('2011', '2013'),
                     'ORGID' = c('1', '3'))
 
-## Restore type
-myData$ORGID <- cast(myData$ORGID, "integer")
-
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
@@ -112,7 +112,8 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                     myPartition,
                     userConfig$dbBENodes,
                     maxValAdd = FALSE),
-                groupSuffix = userConfig$dbName
+                groupSuffix = userConfig$dbName,
+                changeType = myNewType
                 )
 
 print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")

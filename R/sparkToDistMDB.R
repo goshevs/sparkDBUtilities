@@ -49,7 +49,7 @@ makeJdbcKey <- function() {
 ################################################################################
 ### RETRIEVING TABLE SCHEMA
 
-getSchema <- function(x, key = makeJdbcKey()) {
+getSchema <- function(x, key = makeJdbcKey(), changeType = NULL) {
     
     mySchema <- schema(x)
     mySchemaFields <- lapply(sparkR.callJMethod(mySchema$jobj, "fields"), structField)
@@ -77,7 +77,13 @@ getSchema <- function(x, key = makeJdbcKey()) {
     
     mySchemaFinal <- merge(x.schema, key, by = "colType", sort = FALSE)
     mySchemaFinal <- mySchemaFinal[, c("colName", "colType", "mysqlType", "Nullable")]
-    
+
+    ## Change the type of columns per changeType user instructions
+    if (!missing(changeType)) {
+        for (var in names(changeType)) {
+            mySchemaFinal[mySchemaFinal$colName == var, "mysqlType"] <- toupper(changeType[[var]])
+        }
+    }
     return(mySchemaFinal)
 }
 
@@ -104,9 +110,15 @@ getSchema <- function(x, key = makeJdbcKey()) {
 ## partColumn: a string with a column name
 ## partValueList: a list with values to split partColumn by
 
-partitionByListColumn <- function(partitionRules, beNodes, defaultAdd = TRUE) {
+partitionByListColumn <- function(partitionRules, beNodes, tableSchema, defaultAdd = TRUE) {
 
     partColumn <- names(partitionRules)
+    partColumnType <- tableSchema[tableSchema$colName == partColumn, 'mysqlType']
+    
+    ## https://mariadb.com/kb/en/library/string-data-types/
+    quotedTypeList <- c('CHAR', 'VARCHAR', 'BINARY', 'CHAR BYTE', 'VARBINARY')
+    grepString <- paste0(quotedTypeList, collapse = "|")
+                        
     
     ## If defaultAdd, then add default partition provisions
     myDefValue <- as.character(digest(paste0('STDB-DEFAULT-PARTITION', date())))
@@ -126,8 +138,13 @@ partitionByListColumn <- function(partitionRules, beNodes, defaultAdd = TRUE) {
         seq_along(partitionRules[[partColumn]]),
         function(i) {
             if (!myDefValue %in% partitionRules[[partColumn]][[i]]) {
+                if (grepl(grepString, partColumnType)) {
+                    innerString <- paste0("'", partitionRules[[partColumn]][[i]], "'", collapse = ',')
+                } else {
+                     innerString <- paste0(partitionRules[[partColumn]][[i]], collapse = ',')
+                }
                 paste0("PARTITION pt", i, " VALUES IN (",
-                       paste0(partitionRules[[partColumn]][[i]], collapse = ',') ,
+                       innerString,
                        ") COMMENT = 'srv \\\"backend", i, "\\\"'")
             } else {
                 paste0("PARTITION pt", i, " DEFAULT COMMENT = 'srv \\\"backend", i, "\\\"'")
@@ -176,11 +193,18 @@ partitionByHash <- function(partColumn, beNodes) {
 ## partValuesList: a list of values corresponding to every column in partColumns
 ### Corner case: one column --> partValuesList: a vector of values of partColumns
 
-partitionByRangeColumn <- function(partitionRules, beNodes,
+partitionByRangeColumn <- function(partitionRules, beNodes, tableSchema,
                                    maxValAdd = TRUE, sortVal = TRUE) {
 
-    ## Accommodate multiple columns
     partColumn <- names(partitionRules)
+    partColumnType <- tableSchema[tableSchema$colName %in% partColumn, c('colName','mysqlType')]
+    
+    ## https://mariadb.com/kb/en/library/string-data-types/
+    quotedTypeList <- c('CHAR', 'VARCHAR', 'BINARY', 'CHAR BYTE', 'VARBINARY')
+    grepString <- paste0(quotedTypeList, collapse = "|")
+
+    ##
+    ## Accommodate multiple columns
     partColumnCollapsed <- ifelse(length(partColumn) > 1,
                                  paste(partColumn, collapse = ","),
                                  partColumn)
@@ -211,11 +235,14 @@ partitionByRangeColumn <- function(partitionRules, beNodes,
     body <- unlist(lapply(
         1:myCount[[1]],
         function(i) {
-            innerString <- paste(
-                unlist(lapply(partitionRules, '[', i)), collapse = ',')
-                       
+            innerString <- lapply(partitionRules, '[', i)
+            for (var in partColumnCollapsed) {
+                if (grepl(grepString, partColumnType[partColumnType$colName == var, "mysqlType"])) {
+                    innerString[[var]] <- paste0("'",  innerString[[var]], "'")
+                }
+            }
             paste0("PARTITION pt", i, " VALUES LESS THAN (",
-                   innerString,
+                   paste0(unlist(innerString), collapse = ","),
                    ") COMMENT = 'srv \\\"backend", i, "\\\"'")
         }))
     paste(header, "(", paste(body, collapse = ","), ")")
@@ -252,33 +279,22 @@ pushAdminToMDBString <- function(dbBENodes, dbPort, dbUser, dbPass,
 
 
 
-## ===>>> TABLE CALLS             
+## ===>>> TABLE CALLS                 
 
 pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
-                                  partitionString = NULL, changeType = NULL,
-                                  frontEnd = TRUE) {
+                                  partitionString = NULL, frontEnd = TRUE) {
 
-    ## Check for BLOB/TEXT types in partColumn; use user input if provided
-    myProbVars <- tableSchema[tableSchema$colName %in% partColumn &
-                             tableSchema$mysqlType %in% c("BLOB", "TEXT"), "colName"]
-    if (length(myProbVars) > 0 ) {
-        if (missing(changeType)) {
+    ## Check for BLOB/TEXT types in partColumn
+    if (!missing(partitionString) & !missing(partColumn)) { # distributed MDB
+
+        myProbVars <- tableSchema[tableSchema$colName %in% partColumn &
+                                  tableSchema$mysqlType %in% c("BLOB", "TEXT"), "colName"]
+        
+        if (length(myProbVars) > 0 ) {
             stop(paste(paste(myProbVars, collapse = ","), ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
-        } else {
-            for (var in myProbVars) {
-                if (!var %in% names(changeType)) {
-                    stop(paste0(var, ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
-                } else {
-                    if (changeType[[var]] %in% c("BLOB", "TEXT")) {
-                        stop(paste0(var, ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
-                    } else {
-                        tableSchema[tableSchema$colName == var, "mysqlType"] <- changeType[[var]]
-                    }
-                }
-            }
         }
     }
-
+    
     ## Common component
     commonPart <- paste("DROP TABLE IF EXISTS", dbTableName, ";",
                         "CREATE TABLE", dbTableName, "(" ,
