@@ -18,8 +18,8 @@ require(digest)
 
 
 ## Load scripts
-myURL <- c("https://raw.githubusercontent.com/goshevs/sparkDBUtilities/devel/R/sparkArgsParser.R",
-           "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/devel/R/sparkToDistMDB.R")
+myURL <- c("https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkArgsParser.R",
+           "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkToDistMDB.R")
 eval(parse(text = getURL(myURL[1], ssl.verifypeer = FALSE)))
 eval(parse(text = getURL(myURL[2], ssl.verifypeer = FALSE)))
 

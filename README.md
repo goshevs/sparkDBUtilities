@@ -14,8 +14,9 @@ Clone/download the repo and source the R-scripts from your script. It
 is also possible to source them directly from the repo using:
 
 ``` 
-myURL <- c("??",
-           "??")
+myURL <- c(
+    "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkArgsParser.R",
+    "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkToDistMDB.R")
 eval(parse(text = getURL(myURL[1], ssl.verifypeer = FALSE)))
 eval(parse(text = getURL(myURL[2], ssl.verifypeer = FALSE)))
 ```
@@ -30,11 +31,11 @@ location of the scripts to make them discoverable by Python.
 ## Overview of utilities
 
 Both R and Python functions have nearly identical syntax which should
-facilitate back-and-forth transitions.
+facilitate transitions between the software packages.
 
 ### sparkToDistMDB
 
-This script/module contains two functions:
+This script/module contains two primary functions:
 
 - `pushAdminToMDB`: sets up connections, access credentials and
   rights among the frontend and backend MariaDB db instances. The
@@ -47,9 +48,9 @@ This script/module contains two functions:
   field `id` which can be used as a partitioning variable for reading
   a db table into Spark.
 
-`sparkToDistMDB` also contains four utility functions:
+The script/module also contains four utility functions:
 
-- `getSchema`: creates the schema of an RDD. 
+- `getSchema`: retrieves the RDD schema. 
 
 - `partitionByListColumn`: a string writer corresponding to
 partitioning by
@@ -131,20 +132,21 @@ Where:
 - `dbName`: name of the database to write to  
 - `dbTableName`: name of the table to create  
 - `tableSchema`: the schema of the RDD to be written to the db  
-- `partColumn`: list of columns for paritioning  
+- `partColumn`: list of columns for partitioning  
 - `partitionString`: string with db partitioning commands  
 - `groupSuffix`: the tag in `.my.cnf` file to refer to for db login
   information  
 - `changeType`: optional list (in R) or dictionary (in Python) containing
   key-value pairs of column name and column type with the
-  changes to `tableSchema` the user wishes to make  
+  changes to `tableSchema` the user wishes to implement  
 - `debug`: if TRUE/True, prints out all commands instead of executing
   them (default: FALSE/False)  
 
-If pushing to a non-distributed database instance or to the frontend
-db instance of a distributed database instance:  
+If pushing to a non-distributed database instance or to the frontend 
+of a distributed database instance:  
 - `dbNodes` would be the string of the name of the node to push to  
-- arguments `partColumn`, `partitionString`, and `changeType` should be omitted.
+- arguments `partColumn`, `partitionString`, and `changeType` should
+  be omitted.
 
 
 ### `getSchema`
@@ -158,7 +160,8 @@ Where:
 - `RDD`: a Spark RDD  
 - `key`: the key that matches Spark SQL column types to MariaDB column
   types. Currently, *DecimalType* is not supported. A default key is
-  provided by functions `makeLdbcKey` which are included in files `sparkToDistMDB.*`
+  provided by functions `makeJdbcKey` which are included in the
+  respective R or Python `sparkToDistMDB` file.
 
 
 ### `partitionByListColumn`
@@ -174,7 +177,7 @@ Where:
   - R: a list of named lists (where names are RDD column names)  
   - Python: a default dictionary where every value is a list  
 - `beNodes`: list of db backend nodes  
-- `defaultAdd`: add a default partition provision in the partitioning
+- `defaultAdd`: add a default partitioning provision to the partitioning
   rules (default: TRUE/True). This feature is supported on MariaDB 10.2 and
   higher  
   
@@ -207,10 +210,20 @@ Where:
 - `beNodes`: list of db backend nodes  
 - `maxValAdd`: add `maxvalue` clauses to the partitioning rules
   (default: TRUE/True)  
-- `sortVal`: applicable if partitioning by a single column. Sorts
-  the partitioning values in an increasing order (default: TRUE/True)
+- `sortVal`: Sorts the partitioning values in an increasing order
+  (default: TRUE/True). Applicable if partitioning by a single column. 
 
 
+## Limitations
+
+Users should consider the following constraints when using this
+software:
+- The number of partitions **must equal** the number of backend db
+  instances.
+- As mentioned above, columns of *DecimalType* are not supported at
+  this time.
+
+  
 
 ## Examples
 
