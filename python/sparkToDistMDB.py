@@ -9,11 +9,12 @@
 ##
 ##
 ## Simo Goshev
-## Oct 30, 2019
+## Oct 31, 2019
 
 
-from collections import defaultdict
 import copy, subprocess
+from collections import defaultdict
+from datetime import datetime
 
 
 def repeat(x,y):
@@ -41,7 +42,7 @@ def makeJdbcKey():
 ################################################################################
 ### RETRIEVING TABLE SCHEMA
 
-def getSchema(myData, myKey):
+def getSchema(myData, key = makeJdbcKey()):
     ''' Get the schema of the data and add mySQL data types '''     
 
     ## Schema
@@ -55,11 +56,11 @@ def getSchema(myData, myKey):
         mySchemaDict[i.name].extend([str(i.dataType), i.nullable])     
 
     ## Attach the SQL types to the variables
-    for key in mySchemaDict:
-        if str(key) == "DecimalType":
+    for sKey in mySchemaDict:
+        if str(sKey) == "DecimalType":
             raise TypeError("DecimalType is present in data. Possible errors. Please, address accordingly")
         else:
-            mySchemaDict[key].append(myKey[mySchemaDict[key][0]])
+            mySchemaDict[sKey].append(key[mySchemaDict[sKey][0]])
 
     return(mySchemaDict)
 
@@ -67,16 +68,22 @@ def getSchema(myData, myKey):
 ################################################################################
 ### SHARDING RULES
 
-def partitionByListColumn(partitionRules, beNodes):
+def partitionByListColumn(partitionRules, beNodes, defaultAdd = True):
     ''' Partitioning by LIST COLUMNS '''
 
     ## Copy the dict to leave the original unaffected
     partDict = copy.deepcopy(partitionRules)
 
-    ## Check for matching element numbers of partValueList and beNodes
-    numEl = [len(partDict[key]) for key in partDict][0]
     myKey = [key for key in partDict][0]
 
+    ## If defaultAdd, then add default partition provisions
+    myDefValue = str(hash('STDB-DEFAULT-PARTITION' + str(hash(datetime.now()))))
+    if defaultAdd:
+        partDict[myKey].append(myDefValue)
+
+    ## Check for matching element numbers of partValueList and beNodes
+    numEl = [len(partDict[key]) for key in partDict][0]
+    
     if numEl != len(beNodes):
         raise RuntimeError("The number of partitions must equal the number of backend servers.")
     
@@ -85,8 +92,12 @@ def partitionByListColumn(partitionRules, beNodes):
     myPartCommand = []
     for el in partDict[myKey]:
         i = str(partDict[myKey].index(el) + 1)
-        myPartCommand.append(("PARTITION pt" + i +  " VALUES IN (" +
-                              ', '.join(el) + ") COMMENT = 'srv \\\"backend" + i + "\\\"'"))
+        if el != myDefValue:
+            myString = ("PARTITION pt" + i +  " VALUES IN (" +
+                        ', '.join(el) + ") COMMENT = 'srv \\\"backend" + i + "\\\"'")
+        else:
+            myString = ("PARTITION pt" + i + " DEFAULT COMMENT = 'srv \\\"backend" + i + "\\\"'")
+        myPartCommand.append(myString)
 
     return(header + '(' + ', '.join(myPartCommand) +  ')')
 
@@ -165,8 +176,26 @@ def pushAdminToMDBString(dbBENodes, dbPort, dbUser, dbPass, dbName, frontEnd = T
 
     
 def pushSchemaToMDBString(dbTableName, tableSchema, partColumn = None,
-                          partitionString = None, frontEnd = True):
+                          partitionString = None, changeType = None,
+                          frontEnd = True):
     ''' Write out the string of the command for pushing the schema of the table '''
+
+    ## Check for BLOB/TEXT types in partColumn; use user input if provided
+    for key in partColumn:
+        if tableSchema[key][2] in ['BLOB', 'TEXT']:
+            if changeType is None:
+                raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
+            else:
+                try:
+                    myNewType = changeType[key]
+                except:
+                    raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
+                else:
+                    if myNewType in ['BLOB', 'TEXT']:
+                        raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
+                    else:
+                        tableSchema[key][2] = myNewType
+                  
     ## Common component
     commonPart = ("DROP TABLE IF EXISTS " + dbTableName + "; " +
                   "CREATE TABLE " + dbTableName + " (" +
@@ -181,18 +210,19 @@ def pushSchemaToMDBString(dbTableName, tableSchema, partColumn = None,
 
     if partitionString is not None and partColumn is not None:  # dist MDB
         
-        ## Add "id" to partColumn (if not in it) for form primaryKeys
-        try:
-            partColumn.index('id')
-        except:
-            print("Adding 'id' to the list of columns")
-            partColumn.append('id')
-
         ## Write out the schema
         if frontEnd:
+            partColumns = partColumn.copy()
+            ## Add "id" to partColumn (if not in it) for form primaryKeys
+            try:
+                partColumns.index('id')
+            except:
+                print("Adding 'id' to the list of columns")
+                partColumns.insert(0,'id')
+
             dbEngine = "SPIDER"
             myCall = (commonPart + 
-                      ", PRIMARY KEY(" + ', '.join(partColumn) + ")" +
+                      ", PRIMARY KEY(" + ', '.join(partColumns) + ")" +
                       ") ENGINE = " + dbEngine +
                       " COMMENT='wrapper \\\"mysql\\\", table \\\"" + dbTableName + "\\\"' " +
                       partitionString)
@@ -209,7 +239,7 @@ def pushSchemaToMDBString(dbTableName, tableSchema, partColumn = None,
 
 
     
-def pushToMDB(callList, dbNodes, dbName, groupSuffix):
+def pushToMDB(callList, dbNodes, dbName, groupSuffix, debug):
     ''' Make calls to the db '''
 
     mySystemCalls = [("mysql --defaults-group-suffix=" + groupSuffix +
@@ -217,8 +247,10 @@ def pushToMDB(callList, dbNodes, dbName, groupSuffix):
                     " -e \"" + myCall + "\"") for myNode, myCall in zip(dbNodes, callList)]    
     ## Push to MDB
     for myCall in mySystemCalls:
-        ## subprocess.run(myCall, shell = True)
-        print(myCall)
+        if not debug:
+            subprocess.call(myCall, shell = True)
+        else:
+            print(myCall)
 
         
 ################################################################################
@@ -227,7 +259,8 @@ def pushToMDB(callList, dbNodes, dbName, groupSuffix):
 
 ####### ===>> SETUP CALL
 
-def pushAdminToMDB(dbNodes, dbBENodes, dbPort, dbUser, dbPass, dbName, groupSuffix):
+def pushAdminToMDB(dbNodes, dbBENodes, dbPort, dbUser, dbPass, dbName,
+                   groupSuffix, debug = False):
     ''' Composing and making the db admin call '''
     ## Number of frontend and backend nodes
     nodeNumVector = [1, len(dbBENodes)]
@@ -245,99 +278,49 @@ def pushAdminToMDB(dbNodes, dbBENodes, dbPort, dbUser, dbPass, dbName, groupSuff
     myAdminCalls = repeat(myAdminCalls, nodeNumVector)
     
     ## Submit the call
-    pushToMDB(myAdminCalls, dbNodes, dbName, groupSuffix)
+    pushToMDB(myAdminCalls, dbNodes, dbName, groupSuffix, debug)
     
 
 ####### ===>> TABLE SCHEMA CALL
 
 def pushSchemaToMDB(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
-                    partColumn = None, partitionString = None):
+                    partColumn = None, partitionString = None, changeType = None,
+                    debug = False):
     ''' Composing and making the table schema call to the db '''
-    if len(dbNodes) > 1:  # dist DB
-        ## Number of frontend and backend nodes
-        nodeNumVector = [1, len(dbNodes) - 1]
 
-        ## Write out frontend and backend calls
-        mySchemaCall = [pushSchemaToMDBString(dbTableName = dbTableName,
-                                              tableSchema = tableSchema,
-                                              partColumn = partColumn,
-                                              partitionString = partitionString,
-                                              frontEnd = i)
-                        for i in [True, False]]
+    ## Check the tyoe if dbNodes
+    if type(dbNodes).__name__ == 'list':
         
-        ## Add backend calls
-        mySchemaCall = repeat(mySchemaCall, nodeNumVector)
+        if len(dbNodes) > 1:  # dist DB
+            ## Number of frontend and backend nodes
+            nodeNumVector = [1, len(dbNodes) - 1]
 
-    else:  #non-dist DB
+            ## Write out frontend and backend calls
+            mySchemaCall = [pushSchemaToMDBString(dbTableName = dbTableName,
+                                                  tableSchema = tableSchema,
+                                                  partColumn = partColumn,
+                                                  partitionString = partitionString,
+                                                  changeType = changeType,
+                                                  frontEnd = i)
+                            for i in [True, False]]
+        
+            ## Add backend calls
+            mySchemaCall = repeat(mySchemaCall, nodeNumVector)
+
+        else:
+            raise RuntimeError(("If you wish to write to the frontend only, please" +
+                                " provide the name of the node as a string"))
+        
+    elif type(dbNodes).__name__ == 'str':  #non-dist DB
         mySchemaCall = [pushSchemaToMDBString(dbTableName = dbTableName,
                                               tableSchema = tableSchema)]
-           
+        dbNodes = [dbNodes]
+
+    else:
+        raise RuntimeError("Incorrect node specification")
+    
     ## Submit the call
-    pushToMDB(mySchemaCall, dbNodes, dbName, groupSuffix)
-
-
-
-if __name__ == "__main__":
-    
-    from pyspark.sql import SparkSession
-
-    spark = SparkSession.builder \
-      .master('local') \
-      .getOrCreate()
-
-    ## Retrieve arguments passed to the script
-    myArgs = parseArguments(sys.argv)
-    
-    myDataFile =  "/Users/goshev/Desktop/spark/spark-test-data.txt"
-    myData = spark.read.csv(myDataFile, header=True, sep = '*')
-
-    ## Recast year to integer
-    myData = myData.withColumn("year", myData.year.cast("integer"))
-
-    ## Get the schema
-    mySchema = getSchema(myData, makeJdbcKey())
-
-    ## Print the schema
-    print(mySchema)
-
-    ## Partition by list columns
-    myD = defaultdict(list)
-    myD['ORGID'] = [['1', '3', '5'], ['4', '7', '9']]
-    mybeNodes =  ['compute004', 'compute005']
-    print(partitionByListColumn(myD, mybeNodes))
-
-    ## Partition by hash
-    myColumn = "ORGID"
-    print(partitionByHash(myColumn, mybeNodes))
-
-    ## Partition by range columns
-    myD = defaultdict(list)
-    myD['year'] = ['2012', '2014', '2018']
-    myD['ORGID'] = ['1', '3', '5']
-    mybeNodes =  ['compute004', 'compute005', 'compute006', 'compute007']
-    print(partitionByRangeColumn(myD, mybeNodes))
-    
-    
-    ## Push admin info to db
-    pushAdminToMDB(dbNodes = myArgs['dbNodes'],
-                   dbBENodes = myArgs['dbBENodes'],
-                   dbPort = myArgs['dbPort'],
-                   dbUser = myArgs['dbUser'],
-                   dbPass = myArgs['dbPass'],
-                   dbName = myArgs['dbName'],
-                   groupSuffix = myArgs['dbName'])
-
-    ## Push schema to db
-    pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
-                    dbName = myArgs['dbName'],
-                    dbTableName = "testTable",
-                    tableSchema = getSchema(myData, makeJdbcKey()),
-                    groupSuffix = "testData",
-                    partColumn = [key for key in myD],
-                    partitionString = partitionByRangeColumn(myD, myArgs['dbBENodes']) )
-                       
-           
-    spark.stop()
+    pushToMDB(mySchemaCall, dbNodes, dbName, groupSuffix, debug)
 
 
     

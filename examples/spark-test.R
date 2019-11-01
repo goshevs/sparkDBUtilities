@@ -5,20 +5,21 @@
 ##
 ##
 ## Simo Goshev
-## Oct 21, 2019
+## Nov 01, 2019
 
 
 rm(list=ls())
 
 ## Load packages
-library(SparkR)
-library(stringr)
-library(RCurl)
+require(SparkR)
+require(stringr)
+require(RCurl)
+require(digest)
 
 
 ## Load scripts
-myURL <- c("https://raw.githubusercontent.com/goshevs/sparkDBUtilities/devel/sparkArgsParser.R",
-           "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/devel/sparkToDistMDB.R")
+myURL <- c("https://raw.githubusercontent.com/goshevs/sparkDBUtilities/devel/R/sparkArgsParser.R",
+           "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/devel/R/sparkToDistMDB.R")
 eval(parse(text = getURL(myURL[1], ssl.verifypeer = FALSE)))
 eval(parse(text = getURL(myURL[2], ssl.verifypeer = FALSE)))
 
@@ -55,16 +56,19 @@ pushAdminToMDB(dbNodes = userConfig$dbNodes,
                dbUser = userConfig$dbBEUser,
                dbPass = userConfig$dbBEPass,
                dbName = userConfig$dbName,
-               groupSuffix = userConfig$dbName)
+               groupSuffix = userConfig$dbName
+              )
 
 
 ################################################################################
 ### PARTITION BY LIST COLUMNS
 
-myTableName <- "myTableListColumns"
-partColumn <- "ORGID"
-myPartitions <- list(c('1', '2'),
-                     c('3', '4', '5'))
+myTableName <- 'myTableListColumns'
+myPartition <- list('ORGID' = list(c('1', '2'), c('3', '4', '5')))
+
+## Testing type change
+myData$ORGID <- cast(myData$ORGID, "string")
+myNewType <- list('ORGID' = 'VARCHAR(30)')
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
@@ -72,11 +76,14 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
-                partColumn = partColumn,
-                partitionString = partitionByListColumn(partColumn,
-                                                        myPartitions,
-                                                        userConfig$dbBENodes),
-                groupSuffix = userConfig$dbName)
+                partColumn = names(myPartition),
+                partitionString = partitionByListColumn(
+                    myPartition,
+                    userConfig$dbBENodes,
+                    defaultAdd = FALSE),
+                groupSuffix = userConfig$dbName,
+                changeType = myNewType
+                )
 
 print("PRINTX: Push the data to the distributed db (LIST COLUMNS)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
@@ -87,8 +94,12 @@ write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
 ### PARTITION BY RANGE COLUMNS
 
 myTableName <- "myTableRangeColumns"
-partColumn <- c("year", "ORGID")
-myPartitions <- list(c('2013', '3'))
+myPartition <- list('year' = c('2011', '2013'),
+                    'ORGID' = c('1', '3'))
+
+## Restore type
+myData$ORGID <- cast(myData$ORGID, "integer")
+
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
@@ -96,11 +107,13 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
-                partColumn = partColumn,
-                partitionString = partitionByRangeColumn(partColumn,
-                                                         myPartitions,
-                                                         userConfig$dbBENodes),
-                groupSuffix = userConfig$dbName)
+                partColumn = names(myPartition),
+                partitionString = partitionByRangeColumn(
+                    myPartition,
+                    userConfig$dbBENodes,
+                    maxValAdd = FALSE),
+                groupSuffix = userConfig$dbName
+                )
 
 print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
@@ -121,9 +134,11 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
                 partColumn = partColumn,
-                partitionString = partitionByHash(partColumn,
-                                                  userConfig$dbBENodes),
-                groupSuffix = userConfig$dbName)
+                partitionString = partitionByHash(
+                    partColumn,
+                    userConfig$dbBENodes),
+                groupSuffix = userConfig$dbName
+                )
 
 print("PRINTX: Push the data to the distributed db (HASH)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
@@ -141,8 +156,12 @@ pushSchemaToMDB(dbNodes = userConfig$dbNode,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
-                groupSuffix = userConfig$dbName)
+                groupSuffix = userConfig$dbName
+                )
 
 print("PRINTX: Push the data to frontend db (NON-DISTRIBUTED)")
 write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
            user = userConfig$dbUser, password = userConfig$dbPass)
+
+
+sparkR.stop()

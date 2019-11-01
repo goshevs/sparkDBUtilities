@@ -7,21 +7,27 @@
 ## Simo Goshev
 ## Oct 30, 2019
 
-import sys, sparkArgsParser, sparkToDistMDB
+import sys
+import sparkArgsParser as sap
+import sparkToDistMDB as stdb
 from pyspark.sql import SparkSession
 from collections import defaultdict
 
 
     
 ## Collect and parse the arguments passed to the script
-myArgs = parseArguments(sys.argv)
+myArgs = sap.parseArguments(sys.argv)
 
 ## Initialize a spark session
 spark = SparkSession.builder.getOrCreate()
 
 ## Load dataset
 print("PRINTX: Loading data")
-myData = spark.read.csv(myArgs['dataSet'], header=True, sep = '*')
+myData = spark.read.csv(myArgs['dataSet'], 
+                        header=True, 
+                        sep = '*',
+                        inferSchema = True)
+
 
 
 ################################################################################
@@ -29,13 +35,14 @@ myData = spark.read.csv(myArgs['dataSet'], header=True, sep = '*')
 
 ## One time call per session (if writing to the same DB) to set up connectivity
 print("PRINTX: Set up connectivity and credentials")
-pushAdminToMDB(dbNodes = myArgs['dbNodes'],
-               dbBENodes = myArgs['dbBENodes'],
-               dbPort = myArgs['dbPort'],
-               dbUser = myArgs['dbUser'],
-               dbPass = myArgs['dbPass'],
-               dbName = myArgs['dbName'],
-               groupSuffix = myArgs['dbName'])
+stdb.pushAdminToMDB(dbNodes = myArgs['dbNodes'],
+                    dbBENodes = myArgs['dbBENodes'],
+                    dbPort = myArgs['dbPort'],
+                    dbUser = myArgs['dbUser'],
+                    dbPass = myArgs['dbPass'],
+                    dbName = myArgs['dbName'],
+                    groupSuffix = myArgs['dbName']
+                    )
  
 
 ################################################################################
@@ -43,23 +50,29 @@ pushAdminToMDB(dbNodes = myArgs['dbNodes'],
 
 myTableName =  "myTableListColumns"
 myD = defaultdict(list)
-myD['ORGID'] = [['1', '2'], ['3', '4', '5']]
+myD['ORGID'] = [['1', '2']]
+
+## Testing changing of the column type
+myData = myData.withColumn('ORGID', myData.year.cast('string'))
+myNewType = dict({'ORGID': 'VARCHAR(30)'})
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
-pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
-                dbName = myArgs['dbName'],
-                dbTableName = myTableName,
-                tableSchema = getSchema(myData, makeJdbcKey()),
-                groupSuffix = myArgs['dbName'],
-                partColumn = [key for key in myD],
-                partitionString = partitionByListColumn(myD,
-                                                        myArgs['dbBENodes']) )
+stdb.pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
+                     dbName = myArgs['dbName'],
+                     dbTableName = myTableName,
+                     tableSchema = stdb.getSchema(myData),
+                     groupSuffix = myArgs['dbName'],
+                     partColumn = [key for key in myD],
+                     partitionString = stdb.partitionByListColumn(
+                         myD,
+                         myArgs['dbBENodes']),
+                     changeType = myNewType
+                     )
 
 print("PRINTX: Push the data to the distributed db (LIST COLUMNS)")
 myData.write \
-  .mode("append") \
-  .jdbc(myArgs['dbUrl'], myTableName,
+  .jdbc(myArgs['dbUrl'], myTableName, mode = "append", 
         properties={"user": myArgs['dbUser'],
                     "password": myArgs['dbPass']})
 
@@ -72,21 +85,23 @@ myD = defaultdict(list)
 myD['year'] = ['2013']
 myD['ORGID'] = ['3']
 
+myData = myData.withColumn('ORGID', myData.year.cast('integer'))
+
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
-pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
-                dbName = myArgs['dbName'],
-                dbTableName = myTableName,
-                tableSchema = getSchema(myData, makeJdbcKey()),
-                groupSuffix = myArgs['dbName'],
-                partColumn = [key for key in myD],
-                partitionString = partitionByRangeColumn(myD,
-                                                         myArgs['dbBENodes']) )
+stdb.pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
+                     dbName = myArgs['dbName'],
+                     dbTableName = myTableName,
+                     tableSchema = stdb.getSchema(myData),
+                     groupSuffix = myArgs['dbName'],
+                     partColumn = [key for key in myD],
+                     partitionString = stdb.partitionByRangeColumn(
+                         myD,
+                         myArgs['dbBENodes']))
 
 print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")
 myData.write \
-  .mode("append") \
-  .jdbc(myArgs['dbUrl'], myTableName,
+  .jdbc(myArgs['dbUrl'], myTableName, mode = "append",
         properties={"user": myArgs['dbUser'],
                     "password": myArgs['dbPass']})
 
@@ -99,19 +114,19 @@ partColumn = "ORGID"
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the distributed db")
-pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
-                dbName = myArgs['dbName'],
-                dbTableName = myTableName,
-                tableSchema = getSchema(myData, makeJdbcKey()),
-                groupSuffix = myArgs['dbName'],
-                partColumn = [key for key in myD],
-                partitionString = partitionByHash(partColumn,
-                                                  myArgs['dbBENodes']) )
+stdb.pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
+                     dbName = myArgs['dbName'],
+                     dbTableName = myTableName,
+                     tableSchema = stdb.getSchema(myData),
+                     groupSuffix = myArgs['dbName'],
+                     partColumn = [key for key in myD],
+                     partitionString = stdb.partitionByHash(
+                         partColumn,
+                         myArgs['dbBENodes']))
    
 print("PRINTX: Push the data to the distributed db (HASH)")
 myData.write \
-  .mode("append") \
-  .jdbc(myArgs['dbUrl'], myTableName,
+  .jdbc(myArgs['dbUrl'], myTableName, mode = "append",
         properties={"user": myArgs['dbUser'],
                     "password": myArgs['dbPass']})
 
@@ -123,16 +138,15 @@ myTableName = "myTableNonDist"
 
 ## Table-specific call that sets up the distributed table
 print("PRINTX: Push the schema to the frontend db")
-   pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
-                    dbName = myArgs['dbName'],
-                    dbTableName = myTableName,
-                    tableSchema = getSchema(myData, makeJdbcKey()),
-                    groupSuffix = myArgs['dbName'])
+stdb.pushSchemaToMDB(dbNodes = myArgs['dbNode'],
+                     dbName = myArgs['dbName'],
+                     dbTableName = myTableName,
+                     tableSchema = stdb.getSchema(myData),
+                     groupSuffix = myArgs['dbName'])
 
 print("PRINTX: Push the data to frontend db (NON-DISTRIBUTED)")
 myData.write \
-  .mode("append") \
-  .jdbc(myArgs['dbUrl'], myTableName,
+  .jdbc(myArgs['dbUrl'], myTableName, mode = "append",
         properties={"user": myArgs['dbUser'],
                     "password": myArgs['dbPass']})
 

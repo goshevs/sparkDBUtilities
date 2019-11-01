@@ -8,9 +8,7 @@
 ##
 ##
 ## Simo Goshev
-## Oct 17, 2019
-
-
+## Nov 01, 2019
 
 
 ################################################################################
@@ -41,8 +39,9 @@ makeJdbcKey <- function() {
                          "ByteType", "BooleanType", "StringType",  "BinaryType",  "TimestampType",
                          "DateType"), 
              mysqlType = c("INTEGER", "BIGINT", "DOUBLE PRECISION", "REAL", "INTEGER", "BYTE",
-                           "BIT(1)", "TEXT", "BLOB", "TIMESTAMP", "DATE"))
-    )
+                           "BIT(1)", "TEXT", "BLOB", "TIMESTAMP", "DATE")),
+        stringsAsFactors = FALSE)
+    
 }
 ## Note: currently ignoring DecimalType ==> DECIMAL(precision, scale) ##
 
@@ -67,12 +66,13 @@ getSchema <- function(x, key = makeJdbcKey()) {
              Nullable = unlist(
                  lapply(mySchemaFields,
                         function(x) sparkR.callJMethod(x$jobj, "nullable")))
-             )
+             ),
+        stringsAsFactors = FALSE
     )
 
     ## Check for DecimalType and if true, fail
     if ("DecimalType" %in% unique(x.schema$colType)) {
-        stop("getSchema: DecimalType is present in data. Possible errors. Please, address accordingly")
+        stop("getSchema: DecimalType is present in data. Possible errors. Please, address accordingly", call.=FALSE)
     }
     
     mySchemaFinal <- merge(x.schema, key, by = "colType", sort = FALSE)
@@ -104,20 +104,34 @@ getSchema <- function(x, key = makeJdbcKey()) {
 ## partColumn: a string with a column name
 ## partValueList: a list with values to split partColumn by
 
-partitionByListColumn <- function(partColumn, partValueList, beNodes) {
+partitionByListColumn <- function(partitionRules, beNodes, defaultAdd = TRUE) {
 
+    partColumn <- names(partitionRules)
+    
+    ## If defaultAdd, then add default partition provisions
+    myDefValue <- as.character(digest(paste0('STDB-DEFAULT-PARTITION', date())))
+
+    if (defaultAdd) {
+        partNumber <- length(partitionRules[[partColumn]])
+        partitionRules[[partColumn]][partNumber + 1] <- myDefValue
+    }
+        
     ## Check for matching element numbers of partValueList and beNodes
-    if (length(beNodes) != length(partValueList)) {
-        stop("The number of partitions must equal the number of backend servers.")
+    if (length(beNodes) != length(partitionRules[[partColumn]])) {
+        stop("The number of partitions must equal the number of backend servers.", call.=FALSE)
     }
     
     header <- paste0("PARTITION BY LIST COLUMNS (", partColumn, ")")
     body <- unlist(lapply(
-        seq_along(partValueList),
-        function(i) {                                   
-            paste0("PARTITION pt", i, " VALUES IN (",
-                   paste0(partValueList[[i]], collapse = ',') ,
-                   ") COMMENT = 'srv \\\"backend", i, "\\\"'")
+        seq_along(partitionRules[[partColumn]]),
+        function(i) {
+            if (!myDefValue %in% partitionRules[[partColumn]][[i]]) {
+                paste0("PARTITION pt", i, " VALUES IN (",
+                       paste0(partitionRules[[partColumn]][[i]], collapse = ',') ,
+                       ") COMMENT = 'srv \\\"backend", i, "\\\"'")
+            } else {
+                paste0("PARTITION pt", i, " DEFAULT COMMENT = 'srv \\\"backend", i, "\\\"'")
+            }
         }))
     paste(header, "(", paste(body, collapse = ","), ")")
 }
@@ -162,42 +176,46 @@ partitionByHash <- function(partColumn, beNodes) {
 ## partValuesList: a list of values corresponding to every column in partColumns
 ### Corner case: one column --> partValuesList: a vector of values of partColumns
 
-partitionByRangeColumn <- function(partColumn, partValueList, beNodes, maxValAdd = TRUE, sortVal = TRUE) {
+partitionByRangeColumn <- function(partitionRules, beNodes,
+                                   maxValAdd = TRUE, sortVal = TRUE) {
 
     ## Accommodate multiple columns
+    partColumn <- names(partitionRules)
     partColumnCollapsed <- ifelse(length(partColumn) > 1,
                                  paste(partColumn, collapse = ","),
                                  partColumn)
 
     ## Sort partValues
-    if (sortVal & length(partColumn) < 2) { # only sort if partColumn < 2! 
-        if (is.list(partValueList)) { 
-            partValueList <-  lapply(partValueList, sort)
-        } else {
-            partValueList <- sort(partValueList)
-        }
+    if (sortVal & length(partColumn) < 2) { # only sort if partColumn < 2!
+        myVals <- partitionRules[[partColumn]][1]
+        partitionRules[[partColumn]][1] <- sort(myVals)
     }
             
     ## Add maxvalue to partValuesList
     if (maxValAdd) {
-        if (is.list(partValueList)) {
-            partValueList <- c(partValueList, list(rep("maxvalue", length(partColumn))))
-        } else {
-            partValueList <- c(partValueList, "maxvalue")
-        }
+        partitionRules <- lapply(partitionRules, c, "maxvalue")
     }
 
     ## Check for matching element numbers of partValueList and beNodes
-    if (length(beNodes) != length(partValueList)) {
-        stop("The number of partitions must equal the number of backend servers.")
+    myCount <- lapply(partitionRules, length)
+    myCountUnique <- unique(myCount)
+    if (length(myCountUnique) != 1) {
+        stop("The number of values among partitioning variables is not identical.", call.=FALSE)
+    }   
+    if (length(beNodes) != myCountUnique) {
+        stop("The number of partitions must equal the number of backend servers.", call.=FALSE)
     }
-      
+
+    ## Write out partitioning
     header <- paste0("PARTITION BY RANGE COLUMNS (", partColumnCollapsed, ")")
     body <- unlist(lapply(
-        seq_along(partValueList),
-        function(i) {                                   
+        1:myCount[[1]],
+        function(i) {
+            innerString <- paste(
+                unlist(lapply(partitionRules, '[', i)), collapse = ',')
+                       
             paste0("PARTITION pt", i, " VALUES LESS THAN (",
-                   paste0(partValueList[[i]], collapse = ',') ,
+                   innerString,
                    ") COMMENT = 'srv \\\"backend", i, "\\\"'")
         }))
     paste(header, "(", paste(body, collapse = ","), ")")
@@ -237,7 +255,29 @@ pushAdminToMDBString <- function(dbBENodes, dbPort, dbUser, dbPass,
 ## ===>>> TABLE CALLS             
 
 pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
-                                  partitionString = NULL, frontEnd = TRUE) {
+                                  partitionString = NULL, changeType = NULL,
+                                  frontEnd = TRUE) {
+
+    ## Check for BLOB/TEXT types in partColumn; use user input if provided
+    myProbVars <- tableSchema[tableSchema$colName %in% partColumn &
+                             tableSchema$mysqlType %in% c("BLOB", "TEXT"), "colName"]
+    if (length(myProbVars) > 0 ) {
+        if (missing(changeType)) {
+            stop(paste(paste(myProbVars, collapse = ","), ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
+        } else {
+            for (var in myProbVars) {
+                if (!var %in% names(changeType)) {
+                    stop(paste0(var, ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
+                } else {
+                    if (changeType[[var]] %in% c("BLOB", "TEXT")) {
+                        stop(paste0(var, ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
+                    } else {
+                        tableSchema[tableSchema$colName == var, "mysqlType"] <- changeType[[var]]
+                    }
+                }
+            }
+        }
+    }
 
     ## Common component
     commonPart <- paste("DROP TABLE IF EXISTS", dbTableName, ";",
@@ -254,23 +294,19 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
     ## Default key and engine
     dbKeyEngineDefault <- paste0(", PRIMARY KEY(id))", " ENGINE = ", dbEngine, ";")
 
-    
-    if (!missing(partitionString) & !missing(partColumn)) { # dist MDB
-        
-        ## Add "id" to partColumn (if not in it) for form primaryKeys
-        myTest <- intersect("id", partColumn)
-        if (length(myTest) == 0) {
-            primaryKeys <- c("id", partColumn)
-        }
-
-        ## Accommodate multiple primary keys
-        primaryKeys <- ifelse(length(primaryKeys) > 1,
-                              paste(primaryKeys, collapse = ","),
-                              primaryKeys)
-        
-        
-        ## Write out the schema
+    ## Write out the schame
+    if (!missing(partitionString) & !missing(partColumn)) { # distributed MDB
         if (frontEnd) {
+            ## Add "id" to partColumn (if not in it) for form primaryKeys
+            if (!'id' %in% partColumn) {
+                partColumn <- c("id", partColumn)
+            }
+
+            ## Accommodate multiple primary keys
+            primaryKeys <- ifelse(length(partColumn) > 1,
+                                  paste(partColumn, collapse = ","),
+                                  partColumn)
+
             dbEngine <- "SPIDER"
             myCall <- paste0(commonPart,
                              paste0(", PRIMARY KEY(", primaryKeys, ")"),
@@ -282,7 +318,7 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
             myCall <- paste(commonPart, dbKeyEngineDefault)
 
         }
-    } else if (missing(partitionString) & missing(partColumn)) { # non-dist MDB
+    } else if (missing(partitionString) & missing(partColumn)) { # non-distributed MDB
 
         myCall <- paste(commonPart, dbKeyEngineDefault)
         
@@ -298,19 +334,20 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
 
 ## ===>>> SYSTEM CALL
 
-pushToMDB <- function(callVector, dbNodes, dbName, groupSuffix) {
+pushToMDB <- function(callVector, dbNodes, dbName, groupSuffix, debug) {
     
     mySystemCalls <- paste0("mysql --defaults-group-suffix=", groupSuffix,
                            " -h ", dbNodes, " -D ", dbName,
                            " -e \"", callVector, "\"")
     
-    ## Push to MDB    
-    lapply(mySystemCalls, system, intern = TRUE)
-
-    ## Print the call
-    ## lapply(mySytemCalls, print)
+    ## Push to MDB
+    if (!debug) {
+        lapply(mySystemCalls, system, intern = TRUE)
+    } else {
+        ## Print the call
+        lapply(mySystemCalls, print)
+    }
 }
-
 
 ################################################################################
 ### EXECUTING THE MDB CALLS
@@ -319,7 +356,7 @@ pushToMDB <- function(callVector, dbNodes, dbName, groupSuffix) {
 ####### ===>> SETUP CALL
 
 pushAdminToMDB <- function(dbNodes, dbBENodes, dbPort, dbUser ,dbPass,
-                           dbName, groupSuffix) {
+                           dbName, groupSuffix, debug = FALSE) {
 
     ## Number of frontend and backend nodes
     nodeNumVector <- c(1, length(dbBENodes))
@@ -341,14 +378,15 @@ pushAdminToMDB <- function(dbNodes, dbBENodes, dbPort, dbUser ,dbPass,
     myAdminCalls <- rep(myAdminCalls, nodeNumVector)
     
     ## Submit the call
-    pushToMDB(myAdminCalls, dbNodes, dbName, groupSuffix)
+    pushToMDB(myAdminCalls, dbNodes, dbName, groupSuffix, debug)
 }
 
 
 ####### ===>> TABLE SCHEMA CALL
 
 pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
-                            partColumn = NULL, partitionString = NULL) {
+                            partColumn = NULL, partitionString = NULL, changeType = NULL,
+                            debug = FALSE) {
 
     if (length(dbNodes) > 1 ) { # dist DB
         ## Number of frontend and backend nodes
@@ -363,6 +401,7 @@ pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuff
                            tableSchema = tableSchema,
                            partColumn = partColumn,
                            partitionString = partitionString,
+                           changeType = changeType,
                            frontEnd = i)
                    }))
         
@@ -376,5 +415,5 @@ pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuff
     }
     
     ## Submit the call
-    pushToMDB(mySchemaCall, dbNodes, dbName, groupSuffix)
+    pushToMDB(mySchemaCall, dbNodes, dbName, groupSuffix, debug)
 }

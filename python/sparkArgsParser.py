@@ -63,10 +63,4 @@ def parseArguments(myArgs):
         
     return(outDict)
 
-  
-
-# if __name__ == "__main__":
-
-#     myArgs = parseArguments(sys.argv)
-#     print(myArgs)
     
