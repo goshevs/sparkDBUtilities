@@ -98,6 +98,8 @@ dictionary, with the following keys:
 
 ### `pushAdminToMDB`
 
+Utility `pushAdminToMDB` has the following syntax:
+
 ```
 pushAdminToMDB(dbNodes, dbBENodes, dbPort,
                dbUser, dbPass, dbName, 
@@ -120,10 +122,12 @@ Where:
 
 ### `pushSchemaToMDB`
 
+Utility `pushSchemaToMDB` has the following syntax:
+
 ```
 pushSchemaToMDB(dbNodes, dbName, dbTableName, tableSchema,
                 partColumn, partitionString, groupSuffix,
-                changeType, debug)
+                debug)
 ```
 
 Where:
@@ -136,9 +140,6 @@ Where:
 - `partitionString`: string with db partitioning commands  
 - `groupSuffix`: the tag in `.my.cnf` file to refer to for db login
   information  
-- `changeType`: optional list (in R) or dictionary (in Python) containing
-  key-value pairs of column name and column type with the
-  changes to `tableSchema` the user wishes to implement  
 - `debug`: if TRUE/True, prints out all commands instead of executing
   them (default: FALSE/False)  
 
@@ -151,8 +152,10 @@ of a distributed database instance:
 
 ### `getSchema`
 
+Utility `getSchema` has the following syntax:
+
 ```
-getSchema(RDD, key)
+getSchema(RDD, key, changeType)
 ```
 
 Where:
@@ -162,12 +165,17 @@ Where:
   types. Currently, *DecimalType* is not supported. A default key is
   provided by functions `makeJdbcKey` which are included in the
   respective R or Python `sparkToDistMDB` file.
+- `changeType`: optional list (in R) or dictionary (in Python) containing
+  key-value pairs of column name and column type with the
+  changes to Spark-created/inferred schema the user wishes to implement  
 
 
 ### `partitionByListColumn`
 
+Utility `pushAdminToMDB` has the following syntax:
+
 ``` 
-partitionByListColumn(partitionRules, beNodes, defaultAdd)
+partitionByListColumn(partitionRules, beNodes, tableSchema, defaultAdd)
 ```
 
 Where:
@@ -177,12 +185,15 @@ Where:
   - R: a list of named lists (where names are RDD column names)  
   - Python: a default dictionary where every value is a list  
 - `beNodes`: list of db backend nodes  
+- `tableSchema`: the schema of the RDD to be written to the db  
 - `defaultAdd`: add a default partitioning provision to the partitioning
   rules (default: TRUE/True). This feature is supported on MariaDB 10.2 and
   higher  
   
 
 ### `partitionByHash`
+
+Utility `partitionByHash` has the following syntax:
 
 ```
  partitionByHash(partColumn, beNodes)
@@ -196,8 +207,10 @@ Where:
  
 ### `partitionByRangeColumn`
 
+Utility `partitionByRangeColumn` has the following syntax:
+
 ```
-partitionByRangeColumn(partitionRules, beNodes, 
+partitionByRangeColumn(partitionRules, beNodes, tableSchema,
                        maxValAdd, sortVal)
 ```
 
@@ -208,6 +221,7 @@ Where:
   - R: a named list of vectors (where names are RDD column names)  
   - Python: a default dictionary where every value is a list  
 - `beNodes`: list of db backend nodes  
+- `tableSchema`: the schema of the RDD to be written to the db  
 - `maxValAdd`: add `maxvalue` clauses to the partitioning rules
   (default: TRUE/True)  
 - `sortVal`: Sorts the partitioning values in an increasing order
