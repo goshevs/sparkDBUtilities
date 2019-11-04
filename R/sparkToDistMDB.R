@@ -130,9 +130,6 @@ partColVal2String <- function(x, tableSchema) {
 ## ) ;
 
 ## --------------------------
-## Input:
-## partColumn: a string with a column name
-## partValueList: a list with values to split partColumn by
 
 partitionByListColumn <- function(partitionRules, beNodes, tableSchema, defaultAdd = TRUE) {
 
@@ -206,10 +203,6 @@ partitionByHash <- function(partColumn, beNodes) {
 ## ) ;
 
 ## --------------------------
-## Input:
-## partColumn: a vector of strings, names of columns
-## partValuesList: a list of values corresponding to every column in partColumns
-### Corner case: one column --> partValuesList: a vector of values of partColumns
 
 partitionByRangeColumn <- function(partitionRules, beNodes, tableSchema,
                                    maxValAdd = TRUE, sortVal = TRUE) {

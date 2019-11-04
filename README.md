@@ -186,7 +186,7 @@ Where:
   - Python: a default dictionary where every value is a list  
 - `beNodes`: list of db backend nodes  
 - `tableSchema`: the schema of the RDD to be written to the db  
-- `defaultAdd`: add a default partitioning provision to the partitioning
+- `defaultAdd`: add the `DEFAULT` partitioning provision to the partitioning
   rules (default: TRUE/True). This feature is supported on MariaDB 10.2 and
   higher  
   

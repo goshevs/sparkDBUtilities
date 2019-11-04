@@ -12,16 +12,46 @@
 ## Oct 31, 2019
 
 
-import copy, subprocess
+import copy, subprocess, re
 from collections import defaultdict
 from datetime import datetime
 
+    
+################################################################################
+### UTILITY FUNCTIONS
 
+## Repeat
 def repeat(x,y):
     ''' Repeating vales of list x the number of times in list y '''
 
     return([i for i,j in zip(x, y) for k in range(j)])
 
+
+## Replace integer with string partitioning values
+def partColVal2String(x, tableSchema):
+    ''' Write out string partitioning values'''
+
+    quotedTypeList = ['CHAR', 'VARCHAR', 'BINARY',
+                      'CHAR BYTE', 'VARBINARY']
+    reString = '|'.join(quotedTypeList)
+
+    partColNames = [k for k in x if
+                    len(re.findall(reString, tableSchema[k][2])) > 0]
+
+    myNewD = defaultdict(list)
+    if len(partColNames) > 0:
+        ## Replace values
+        for k in partColNames:
+            for l in x[k]:
+                if type(l).__name__ != "list":
+                    mylist = "\'" + str(l) + "\'"
+                else:
+                    mylist = [("\'" + str(m) + "\'") for m in l]
+                myNewD[k].append(mylist)
+            x[k] = myNewD[k]
+    return(x)
+
+    
 ################################################################################
 ### CREATE CONVERSION KEY
 
@@ -42,7 +72,7 @@ def makeJdbcKey():
 ################################################################################
 ### RETRIEVING TABLE SCHEMA
 
-def getSchema(myData, key = makeJdbcKey()):
+def getSchema(myData, key = makeJdbcKey(), changeType = None ):
     ''' Get the schema of the data and add mySQL data types '''     
 
     ## Schema
@@ -57,22 +87,33 @@ def getSchema(myData, key = makeJdbcKey()):
 
     ## Attach the SQL types to the variables
     for sKey in mySchemaDict:
-        if str(sKey) == "DecimalType":
+        if str(mySchemaDict[sKey][0]) == "DecimalType":
             raise TypeError("DecimalType is present in data. Possible errors. Please, address accordingly")
         else:
-            mySchemaDict[sKey].append(key[mySchemaDict[sKey][0]])
-
+            if changeType is None or sKey not in changeType:
+                mySchemaDict[sKey].append(key[mySchemaDict[sKey][0]])
+            else:
+                mySchemaDict[sKey].append(changeType[sKey].upper())  
+    
     return(mySchemaDict)
+
+
 
 
 ################################################################################
 ### SHARDING RULES
 
-def partitionByListColumn(partitionRules, beNodes, defaultAdd = True):
+## ====== >>> SHARDING BY LIST COLUMNS
+
+def partitionByListColumn(partitionRules, tableSchema, beNodes,
+                          defaultAdd = True):
     ''' Partitioning by LIST COLUMNS '''
 
     ## Copy the dict to leave the original unaffected
     partDict = copy.deepcopy(partitionRules)
+
+    ## Cast values of partitioning character type columns to character type 
+    partDict = partColVal2String(partDict, tableSchema)
 
     myKey = [key for key in partDict][0]
 
@@ -102,6 +143,9 @@ def partitionByListColumn(partitionRules, beNodes, defaultAdd = True):
     return(header + '(' + ', '.join(myPartCommand) +  ')')
 
 
+
+## ====== >>> SHARDING BY HASH
+
 def partitionByHash(partColumn, beNodes):
     ''' Partitioning by HASH '''
 
@@ -112,14 +156,20 @@ def partitionByHash(partColumn, beNodes):
         myPartCommand.append(("PARTITION pt" + i + " COMMENT = 'srv \\\"backend" + i + "\\\"'"))
 
     return(header + '(' + ', '.join(myPartCommand) + ')')
+
+
     
+## ====== >>> SHARDING BY RANGE COLUMNS
 
-
-def partitionByRangeColumn(partitionRules, beNodes, maxValAdd = True, sortVal = True):
+def partitionByRangeColumn(partitionRules, tableSchema, beNodes,
+                           maxValAdd = True, sortVal = True):
     ''' Partitioning by RANGE COLUMNS '''
 
     ## Copy the dict to leave the original unaffected
     partDict = copy.deepcopy(partitionRules)
+
+    ## Cast values of partitioning character type columns to character type 
+    partDict = partColVal2String(partDict, tableSchema)
 
     ## Sort partValues; only sort if partColumn < 2!
     if sortVal and len(partDict) < 2:
@@ -176,27 +226,17 @@ def pushAdminToMDBString(dbBENodes, dbPort, dbUser, dbPass, dbName, frontEnd = T
 
     
 def pushSchemaToMDBString(dbTableName, tableSchema, partColumn = None,
-                          partitionString = None, changeType = None,
-                          frontEnd = True):
+                          partitionString = None, frontEnd = True):
     ''' Write out the string of the command for pushing the schema of the table '''
 
     ## Check for BLOB/TEXT types in partColumn; use user input if provided
     if partitionString is not None and partColumn is not None:  # dist MDB
+        if type(partColumn).__name__ == "str":
+            partColumn = [partColumn]
+
         for key in partColumn:
-            if tableSchema[key][2] in ['BLOB', 'TEXT']:
-                if changeType is None:
-                    raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
-                else:
-                    try:
-                        myNewType = changeType[key]
-                    except:
-                        raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
-                    else:
-                        if myNewType in ['BLOB', 'TEXT']:
-                            raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")
-                        else:
-                            tableSchema[key][2] = myNewType
-                         
+            if len(re.findall('BLOB|TEXT', tableSchema[key][2])) > 0:
+                raise RuntimeError(key + ": Partitioning columns cannot be of type BLOB/TEXT")                      
     
     ## Common component
     commonPart = ("DROP TABLE IF EXISTS " + dbTableName + "; " +
@@ -285,7 +325,7 @@ def pushAdminToMDB(dbNodes, dbBENodes, dbPort, dbUser, dbPass, dbName,
 ####### ===>> TABLE SCHEMA CALL
 
 def pushSchemaToMDB(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
-                    partColumn = None, partitionString = None, changeType = None,
+                    partColumn = None, partitionString = None,
                     debug = False):
     ''' Composing and making the table schema call to the db '''
 
@@ -301,7 +341,6 @@ def pushSchemaToMDB(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
                                                   tableSchema = tableSchema,
                                                   partColumn = partColumn,
                                                   partitionString = partitionString,
-                                                  changeType = changeType,
                                                   frontEnd = i)
                             for i in [True, False]]
         

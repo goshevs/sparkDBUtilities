@@ -143,7 +143,6 @@ if (!debugFlag) {
 ################################################################################
 ### PARTITION BY HASH
 
-
 myTableName <- "myTableHash"
 partColumn <- "ORGID"
 
