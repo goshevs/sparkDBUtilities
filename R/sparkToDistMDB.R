@@ -8,7 +8,7 @@
 ##
 ##
 ## Simo Goshev
-## Nov 01, 2019
+## Nov 04, 2019
 
 
 ################################################################################
@@ -88,6 +88,30 @@ getSchema <- function(x, key = makeJdbcKey(), changeType = NULL) {
 }
 
 
+
+################################################################################
+### UTILITY FUNCTION
+
+## Replace integer with string partitioning values
+partColVal2String <- function(x, tableSchema) {
+
+    ## Define list of admissible character types
+    ## https://mariadb.com/kb/en/library/string-data-types/
+    quotedTypeList <- c('CHAR', 'VARCHAR', 'BINARY', 'CHAR BYTE', 'VARBINARY')
+    grepString <- paste0(quotedTypeList, collapse = "|")
+
+    charVar <- tableSchema[tableSchema$colName %in% names(x) & 
+                           grepl(grepString, tableSchema$mysqlType), 'colName']
+    
+    if (length(charVar) > 0) {
+        ## Replace values
+        repList <- lapply(x[charVar], function(i) {sapply(i, function(j) {paste0("'", j ,"'")}, USE.NAMES = FALSE)})
+        for (var in charVar) { x[[var]] <- repList[[var]]}
+    }
+    
+    return(x)
+}
+
 ################################################################################
 ### SHARDING RULES
 
@@ -113,13 +137,10 @@ getSchema <- function(x, key = makeJdbcKey(), changeType = NULL) {
 partitionByListColumn <- function(partitionRules, beNodes, tableSchema, defaultAdd = TRUE) {
 
     partColumn <- names(partitionRules)
-    partColumnType <- tableSchema[tableSchema$colName == partColumn, 'mysqlType']
-    
-    ## https://mariadb.com/kb/en/library/string-data-types/
-    quotedTypeList <- c('CHAR', 'VARCHAR', 'BINARY', 'CHAR BYTE', 'VARBINARY')
-    grepString <- paste0(quotedTypeList, collapse = "|")
-                        
-    
+
+    ## Cast values of partitioning character type columns to character type 
+    partitionRules <- partColVal2String(partitionRules, tableSchema)
+   
     ## If defaultAdd, then add default partition provisions
     myDefValue <- as.character(digest(paste0('STDB-DEFAULT-PARTITION', date())))
 
@@ -132,19 +153,14 @@ partitionByListColumn <- function(partitionRules, beNodes, tableSchema, defaultA
     if (length(beNodes) != length(partitionRules[[partColumn]])) {
         stop("The number of partitions must equal the number of backend servers.", call.=FALSE)
     }
-    
+        
     header <- paste0("PARTITION BY LIST COLUMNS (", partColumn, ")")
     body <- unlist(lapply(
         seq_along(partitionRules[[partColumn]]),
         function(i) {
             if (!myDefValue %in% partitionRules[[partColumn]][[i]]) {
-                if (grepl(grepString, partColumnType)) {
-                    innerString <- paste0("'", partitionRules[[partColumn]][[i]], "'", collapse = ',')
-                } else {
-                     innerString <- paste0(partitionRules[[partColumn]][[i]], collapse = ',')
-                }
                 paste0("PARTITION pt", i, " VALUES IN (",
-                       innerString,
+                       paste0(partitionRules[[partColumn]][[i]], collapse = ',') ,
                        ") COMMENT = 'srv \\\"backend", i, "\\\"'")
             } else {
                 paste0("PARTITION pt", i, " DEFAULT COMMENT = 'srv \\\"backend", i, "\\\"'")
@@ -169,6 +185,8 @@ partitionByListColumn <- function(partitionRules, beNodes, tableSchema, defaultA
 ## beNodes: a vector of backend nodes
 
 partitionByHash <- function(partColumn, beNodes) {
+
+    ## Writing out partitoning schema   
     header <- paste0("PARTITION BY HASH (", partColumn, ")")
     body <- unlist(lapply(
         seq_along(beNodes),
@@ -197,13 +215,10 @@ partitionByRangeColumn <- function(partitionRules, beNodes, tableSchema,
                                    maxValAdd = TRUE, sortVal = TRUE) {
 
     partColumn <- names(partitionRules)
-    partColumnType <- tableSchema[tableSchema$colName %in% partColumn, c('colName','mysqlType')]
-    
-    ## https://mariadb.com/kb/en/library/string-data-types/
-    quotedTypeList <- c('CHAR', 'VARCHAR', 'BINARY', 'CHAR BYTE', 'VARBINARY')
-    grepString <- paste0(quotedTypeList, collapse = "|")
 
-    ##
+    ## Cast values of partitioning character type columns to character type 
+    partitionRules <- partColVal2String(partitionRules, tableSchema)
+       
     ## Accommodate multiple columns
     partColumnCollapsed <- ifelse(length(partColumn) > 1,
                                  paste(partColumn, collapse = ","),
@@ -235,14 +250,11 @@ partitionByRangeColumn <- function(partitionRules, beNodes, tableSchema,
     body <- unlist(lapply(
         1:myCount[[1]],
         function(i) {
-            innerString <- lapply(partitionRules, '[', i)
-            for (var in partColumnCollapsed) {
-                if (grepl(grepString, partColumnType[partColumnType$colName == var, "mysqlType"])) {
-                    innerString[[var]] <- paste0("'",  innerString[[var]], "'")
-                }
-            }
+            innerString <- paste(
+                unlist(lapply(partitionRules, '[', i)), collapse = ',')
+
             paste0("PARTITION pt", i, " VALUES LESS THAN (",
-                   paste0(unlist(innerString), collapse = ","),
+                   innerString,
                    ") COMMENT = 'srv \\\"backend", i, "\\\"'")
         }))
     paste(header, "(", paste(body, collapse = ","), ")")
@@ -288,7 +300,7 @@ pushSchemaToMDBString <- function(dbTableName, tableSchema, partColumn = NULL,
     if (!missing(partitionString) & !missing(partColumn)) { # distributed MDB
 
         myProbVars <- tableSchema[tableSchema$colName %in% partColumn &
-                                  tableSchema$mysqlType %in% c("BLOB", "TEXT"), "colName"]
+                                  grepl("BLOB|TEXT", tableSchema$mysqlType), "colName"]
         
         if (length(myProbVars) > 0 ) {
             stop(paste(paste(myProbVars, collapse = ","), ": Partitioning columns cannot be of type BLOB/TEXT"), call.=FALSE)
@@ -401,7 +413,7 @@ pushAdminToMDB <- function(dbNodes, dbBENodes, dbPort, dbUser ,dbPass,
 ####### ===>> TABLE SCHEMA CALL
 
 pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuffix,
-                            partColumn = NULL, partitionString = NULL, changeType = NULL,
+                            partColumn = NULL, partitionString = NULL,
                             debug = FALSE) {
 
     if (length(dbNodes) > 1 ) { # dist DB
@@ -417,7 +429,6 @@ pushSchemaToMDB <- function(dbNodes, dbName, dbTableName, tableSchema, groupSuff
                            tableSchema = tableSchema,
                            partColumn = partColumn,
                            partitionString = partitionString,
-                           changeType = changeType,
                            frontEnd = i)
                    }))
         

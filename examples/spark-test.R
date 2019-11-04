@@ -5,7 +5,7 @@
 ##
 ##
 ## Simo Goshev
-## Nov 01, 2019
+## Nov 04, 2019
 
 
 rm(list=ls())
@@ -18,8 +18,8 @@ require(digest)
 
 
 ## Load scripts
-##myPath = '/Users/goshev/Desktop/gitProjects/sparkDBUtilities/R/'
-myPath = '/data/goshev/projects/sparktest/scripts/'
+myPath = '/Users/goshev/Desktop/gitProjects/sparkDBUtilities/R/'
+## myPath = '/data/goshev/projects/sparktest/scripts/'
 source(paste0(myPath, 'sparkArgsParser.R'))
 source(paste0(myPath, 'sparkToDistMDB.R'))
        
@@ -27,6 +27,10 @@ source(paste0(myPath, 'sparkToDistMDB.R'))
 ##            "https://raw.githubusercontent.com/goshevs/sparkDBUtilities/master/R/sparkToDistMDB.R")
 ## eval(parse(text = getURL(myURL[1], ssl.verifypeer = FALSE)))
 ## eval(parse(text = getURL(myURL[2], ssl.verifypeer = FALSE)))
+
+
+## Debug Flag
+debugFlag = FALSE
 
 
 ## Collect the arguments passed to the script
@@ -48,7 +52,6 @@ myData <- read.df(userConfig$dataSet,
                   sep = "*")
 
 
-
 ################################################################################
 ### SET UP CONNECTIONS AND CREDENTIALS
 
@@ -60,7 +63,8 @@ pushAdminToMDB(dbNodes = userConfig$dbNodes,
                dbUser = userConfig$dbBEUser,
                dbPass = userConfig$dbBEPass,
                dbName = userConfig$dbName,
-               groupSuffix = userConfig$dbName
+               groupSuffix = userConfig$dbName,
+               debug = debugFlag
               )
 
 
@@ -73,24 +77,31 @@ myPartition <- list('ORGID' = list(c('1', '2'), c('3', '4', '5')))
 ## Type change from TEXT to VARCHAR(30)
 myNewType <- list('ORGID' = 'VARCHAR(30)')
 
+## Change the table schema
+myTableSchema <- getSchema(myData, changeType = myNewType)
+
 ## Table-specific call that sets up the distributed table
-print("PRINTX: Push the schema to the distributed db")
+print("PRINTX: Push the schema to the distributed db (LIST COLUMNS)")
 pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
-                tableSchema = getSchema(myData),
+                tableSchema = myTableSchema,
                 partColumn = names(myPartition),
                 partitionString = partitionByListColumn(
                     myPartition,
                     userConfig$dbBENodes,
+                    myTableSchema,
                     defaultAdd = FALSE),
                 groupSuffix = userConfig$dbName,
-                changeType = myNewType
+                debug = debugFlag
                 )
 
-print("PRINTX: Push the data to the distributed db (LIST COLUMNS)")
-write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
-           user = userConfig$dbUser, password = userConfig$dbPass)
+
+if (!debugFlag) {
+    print("PRINTX: Push the data to the distributed db (LIST COLUMNS)")
+    write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
+               user = userConfig$dbUser, password = userConfig$dbPass)
+}
 
 
 ################################################################################
@@ -100,26 +111,34 @@ myTableName <- "myTableRangeColumns"
 myPartition <- list('year' = c('2011', '2013'),
                     'ORGID' = c('1', '3'))
 
+## Type change from TEXT to VARCHAR(30)
+myNewType <- list('year' = 'INTEGER',
+                  'ORGID' = 'VARCHAR(30)')
+
+## Change the table schema
+myTableSchema <- getSchema(myData, changeType = myNewType)
 
 ## Table-specific call that sets up the distributed table
-print("PRINTX: Push the schema to the distributed db")
+print("PRINTX: Push the schema to the distributed db (RANGE COLUMNS)")
 pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
-                tableSchema = getSchema(myData),
+                tableSchema = myTableSchema,
                 partColumn = names(myPartition),
                 partitionString = partitionByRangeColumn(
                     myPartition,
                     userConfig$dbBENodes,
+                    myTableSchema,
                     maxValAdd = FALSE),
                 groupSuffix = userConfig$dbName,
-                changeType = myNewType
+                debug = debugFlag
                 )
 
-print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")
-write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
-           user = userConfig$dbUser, password = userConfig$dbPass)
-
+if (!debugFlag) {
+    print("PRINTX: Push the data to the distributed db (RANGE COLUMNS)")
+    write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
+               user = userConfig$dbUser, password = userConfig$dbPass)
+}
 
 ################################################################################
 ### PARTITION BY HASH
@@ -128,23 +147,32 @@ write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
 myTableName <- "myTableHash"
 partColumn <- "ORGID"
 
+## Type change from TEXT to VARCHAR(30)
+myNewType <- list('ORGID' = 'VARCHAR(30)')
+
+## Change the table schema
+myTableSchema <- getSchema(myData, changeType = myNewType)
+
+
 ## Table-specific call that sets up the distributed table
-print("PRINTX: Push the schema to the distributed db")
+print("PRINTX: Push the schema to the distributed db (HASH)")
 pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
-                tableSchema = getSchema(myData),
+                tableSchema = myTableSchema,
                 partColumn = partColumn,
                 partitionString = partitionByHash(
                     partColumn,
                     userConfig$dbBENodes),
-                groupSuffix = userConfig$dbName
+                groupSuffix = userConfig$dbName,
+                debug = debugFlag
                 )
 
-print("PRINTX: Push the data to the distributed db (HASH)")
-write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
-           user = userConfig$dbUser, password = userConfig$dbPass)
-
+if (!debugFlag) {
+    print("PRINTX: Push the data to the distributed db (HASH)")
+    write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
+               user = userConfig$dbUser, password = userConfig$dbPass)
+}
 
 ################################################################################
 ### NO PARTITIONING
@@ -152,17 +180,19 @@ write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
 myTableName <- "myTableNonDist"
 
 ## Table-specific call that sets up the distributed table
-print("PRINTX: Push the schema to the frontend db")
+print("PRINTX: Push the schema to the frontend db (NON-DISTRIBUTED)")
 pushSchemaToMDB(dbNodes = userConfig$dbNode,
                 dbName = userConfig$dbName,
                 dbTableName = myTableName,
                 tableSchema = getSchema(myData),
-                groupSuffix = userConfig$dbName
+                groupSuffix = userConfig$dbName,
+                debug = debugFlag
                 )
 
-print("PRINTX: Push the data to frontend db (NON-DISTRIBUTED)")
-write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
-           user = userConfig$dbUser, password = userConfig$dbPass)
-
+if (!debugFlag) {
+    print("PRINTX: Push the data to frontend db (NON-DISTRIBUTED)")
+    write.jdbc(myData, userConfig$dbUrl, myTableName, mode = "append",
+               user = userConfig$dbUser, password = userConfig$dbPass)
+}
 
 sparkR.stop()
