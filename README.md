@@ -3,7 +3,11 @@
 ## Introduction
 
 The repo contains a set of Python and R utilities for pushing Spark
-RDD's to MariaDB distributed databases.
+RDD's to MariaDB distributed databases. The need for such utilities
+arises from the fact that table schemas in MariaDB are not propagated
+automatically from the frontend instance to the backend instances. The
+utilities in this repo implement the propagation.
+
 
 ## Installation
 
@@ -240,10 +244,11 @@ software:
   instances.
 - As mentioned above, columns of *DecimalType* are not supported at
   this time.
-
+- `partitionByListColumn` accepts columns names only as expressions
+  are not supported at this time.
   
 
 ## Examples
 
-Please, see directory `examples` for use cases in Python and R.
+Please, see directory `examples` for a use case in Python and R.
 
