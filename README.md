@@ -1,10 +1,9 @@
-# Utilities for pushing Spark RDD's to MariaDB distributed databases
+#  Utilities for pushing Spark RDD's to MariaDB distributed databases
 
 ## Introduction
 
 The repo contains a set of Python and R utilities for pushing Spark
 RDD's to MariaDB distributed databases.
-
 
 ## Installation
 
@@ -30,7 +29,7 @@ location of the scripts to make them discoverable by Python.
 
 ## Overview of utilities
 
-Both R and Python functions have nearly identical syntax which should
+All R and Python functions have identical syntax which should
 facilitate transitions between the software packages.
 
 ### sparkToDistMDB
@@ -119,6 +118,7 @@ Where:
 - `debug`: if TRUE/True, prints out all commands instead of execturing
   them (default: FALSE/False)
 
+<br>
 
 ### `pushSchemaToMDB`
 
@@ -149,6 +149,7 @@ of a distributed database instance:
 - arguments `partColumn`, `partitionString`, and `changeType` should
   be omitted.
 
+<br>
 
 ### `getSchema`
 
@@ -169,6 +170,7 @@ Where:
   key-value pairs of column name and column type with the
   changes to Spark-created/inferred schema the user wishes to implement  
 
+<br>
 
 ### `partitionByListColumn`
 
@@ -190,6 +192,7 @@ Where:
   rules (default: TRUE/True). This feature is supported on MariaDB 10.2 and
   higher  
   
+<br>
 
 ### `partitionByHash`
 
@@ -204,7 +207,8 @@ Utility `partitionByHash` has the following syntax:
  - `partColumn`: an RDD column name  
  - `beNodes`: list of db backend nodes  
  
- 
+<br> 
+
 ### `partitionByRangeColumn`
 
 Utility `partitionByRangeColumn` has the following syntax:
@@ -241,5 +245,5 @@ software:
 
 ## Examples
 
-Please, see directory `examples` for use cases in both R and Python.
+Please, see directory `examples` for use cases in Python and R.
 
