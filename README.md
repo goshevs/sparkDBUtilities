@@ -1,7 +1,7 @@
 #  Utilities for pushing Spark RDD's to MariaDB distributed databases
 
 ## Introduction
-
+    
 The repo contains a set of Python and R utilities for pushing Spark
 RDD's to MariaDB distributed databases. The need for such utilities
 arises from the fact that table schemas in MariaDB are not propagated
@@ -93,7 +93,7 @@ dictionary, with the following keys:
 - `dbUrl`: jdbc database connection string   
 - `dbNodes`: list of all nodes on the db cluster  
 - `dbBEUser`: user name for logging in to the **backend** db servers  
-- `dbBEPass`: passowrd for `dbBEUser`  
+- `dbBEPass`: password for `dbBEUser`  
 - `dbBENodes`: list of db backend nodes  
 
 
@@ -118,8 +118,8 @@ Where:
 - `dbPass`: password for logging in to the **backend** nodes  
 - `dbName`: name of the database to write to  
 - `groupSuffix`: the tag in `.my.cnf` file to refer for login
-  informaiton when logging to the db  
-- `debug`: if TRUE/True, prints out all commands instead of execturing
+  information when logging to the db  
+- `debug`: if TRUE/True, prints out all commands instead of executing
   them (default: FALSE/False)
 
 <br>
