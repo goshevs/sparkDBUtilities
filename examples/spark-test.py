@@ -15,7 +15,7 @@ from collections import defaultdict
 
 
 ## Debug Flag
-debugFlag = True
+debugFlag = False
 
 ## Collect and parse the arguments passed to the script
 myArgs = sap.parseArguments(sys.argv)
@@ -89,8 +89,8 @@ if not debugFlag:
 
 myTableName =  'myTableRangeColumns'
 myPartition = defaultdict(list)
-myPartition['year'] = ['2011', '2013']
-myPartition['ORGID'] = ['1', '3']
+myPartition['year'] = ['2013']
+myPartition['ORGID'] = ['3']
 
 ## Type change from TEXT to VARCHAR(30)
 myNewType = dict({'year': 'INTEGER', 'ORGID': 'VARCHAR(30)'})
@@ -109,7 +109,7 @@ stdb.pushSchemaToMDB(dbNodes = myArgs['dbNodes'],
                          myPartition,
                          myTableSchema,
                          myArgs['dbBENodes'],
-                         maxValAdd = False),
+                         maxValAdd = True),
                      groupSuffix = myArgs['dbName'],
                      debug = debugFlag
                      )
@@ -127,8 +127,8 @@ if not debugFlag:
 myTableName = 'myTableHash'
 partColumn = 'ORGID'
 
-## Type change from TEXT to VARCHAR(30)
-myNewType = dict({'ORGID': 'VARCHAR(30)'})
+## Type change from TEXT to INTEGER
+myNewType = dict({'ORGID': 'MEDIUMINT'})
 
 ## Change the table schema
 myTableSchema = stdb.getSchema(myData, changeType = myNewType)

@@ -18,8 +18,8 @@ require(digest)
 
 
 ## Load scripts
-myPath = '/Users/goshev/Desktop/gitProjects/sparkDBUtilities/R/'
-## myPath = '/data/goshev/projects/sparktest/scripts/'
+## myPath = '/Users/goshev/Desktop/gitProjects/sparkDBUtilities/R/'
+myPath = '/data/goshev/projects/sparktest/scripts/'
 source(paste0(myPath, 'sparkArgsParser.R'))
 source(paste0(myPath, 'sparkToDistMDB.R'))
        
@@ -108,8 +108,8 @@ if (!debugFlag) {
 ### PARTITION BY RANGE COLUMNS
 
 myTableName <- "myTableRangeColumns"
-myPartition <- list('year' = c('2011', '2013'),
-                    'ORGID' = c('1', '3'))
+myPartition <- list('year' = c('2013'),
+                    'ORGID' = c('3'))
 
 ## Type change from TEXT to VARCHAR(30)
 myNewType <- list('year' = 'INTEGER',
@@ -129,7 +129,7 @@ pushSchemaToMDB(dbNodes = userConfig$dbNodes,
                     myPartition,
                     userConfig$dbBENodes,
                     myTableSchema,
-                    maxValAdd = FALSE),
+                    maxValAdd = TRUE),
                 groupSuffix = userConfig$dbName,
                 debug = debugFlag
                 )
@@ -143,11 +143,12 @@ if (!debugFlag) {
 ################################################################################
 ### PARTITION BY HASH
 
+
 myTableName <- "myTableHash"
 partColumn <- "ORGID"
 
-## Type change from TEXT to VARCHAR(30)
-myNewType <- list('ORGID' = 'VARCHAR(30)')
+## Type change from TEXT to INTEGER
+myNewType <- list('ORGID' = 'MEDIUMINT')
 
 ## Change the table schema
 myTableSchema <- getSchema(myData, changeType = myNewType)
